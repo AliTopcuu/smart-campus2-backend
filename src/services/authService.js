@@ -36,7 +36,7 @@ const buildUserPayload = (user) => {
     email: user.email,
     role: user.role,
     phone: user.phone,
-    profilePictureUrl: user.profilePictureUrl,
+    avatarUrl: user.profilePictureUrl, // profilePictureUrl'yi avatarUrl olarak döndür
     studentNumber: user.Student?.studentNumber,
     department,
   };
