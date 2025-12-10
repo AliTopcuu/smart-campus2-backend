@@ -3,7 +3,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY src ./src
-COPY config ./config
 ENV NODE_ENV=production
 EXPOSE 5000
 CMD ["node", "src/server.js"]
