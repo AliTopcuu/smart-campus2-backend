@@ -1,8 +1,7 @@
+// Sequelize CLI için config dosyası
+// Bu dosya sadece migration'lar için kullanılıyor
 require('dotenv').config();
 
-// LOCAL: Docker container'ından bağlanıyoruz
-// .env dosyasında DATABASE_URL tanımlayın veya buradaki default değeri değiştirin
-// Docker PostgreSQL: postgres:yourPassword@localhost:5432/campus
 const defaultUrl = process.env.DATABASE_URL || 'postgres://postgres:yourPassword@localhost:5432/campus';
 
 module.exports = {
@@ -12,12 +11,12 @@ module.exports = {
     logging: false,
   },
   test: {
-    url: defaultUrl,
+    url: process.env.TEST_DATABASE_URL || 'postgres://postgres:yourPassword@localhost:5432/campus_test',
     dialect: 'postgres',
     logging: false,
   },
   production: {
-    url: defaultUrl,
+    url: process.env.DATABASE_URL || defaultUrl,
     dialect: 'postgres',
     logging: false,
   },

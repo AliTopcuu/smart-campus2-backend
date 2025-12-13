@@ -2,12 +2,13 @@
 
 const { Pool } = require('pg');
 
+// LOCAL: Docker container'ından bağlanıyoruz
 const pool = new Pool({
-  user: 'ranad',         // Kullanıcı adın
-  host: 'localhost',
-  database: 'campus.db', // Hedef veritabanı
-  password: 'ranad',          // Şifren (yoksa boş bırak)
-  port: 5432,
+  user: process.env.DB_USER || 'postgres',              // Docker PostgreSQL default user
+  host: process.env.DB_HOST || 'localhost',            // Docker container port mapping
+  database: process.env.DB_NAME || 'campus',            // Hedef veritabanı
+  password: process.env.DB_PASSWORD || 'yourPassword',  // Docker container password
+  port: parseInt(process.env.DB_PORT || '5432'),
 });
 
 pool.connect()

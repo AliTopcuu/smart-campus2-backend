@@ -11,7 +11,16 @@ const start = async () => {
   for (let i = 0; i < maxRetries; i++) {
     try {
       await db.sequelize.authenticate();
-      await db.sequelize.sync();
+      
+      // Production'da sync kullanma, sadece development'ta
+      // Production'da migration'ları manuel çalıştır: npx sequelize-cli db:migrate
+      if (process.env.NODE_ENV !== 'production') {
+        await db.sequelize.sync({ alter: false }); // alter: false güvenlik için
+        console.log('✅ Veritabanı senkronize edildi (development mode)');
+      } else {
+        console.log('✅ Veritabanı bağlantısı başarılı (production mode - migration kullanın)');
+      }
+      
       console.log('✅ Veritabanı bağlantısı BAŞARILI');
 
       app.listen(PORT, () => {

@@ -2,9 +2,23 @@
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
-  async up() {
-    // Bu migrasyonun sütunları zaten veritabanında olduğu için 
-    // çalışmaması için içeriğini boş bıraktık.
+  async up(queryInterface, Sequelize) {
+    // resetToken ve resetExpires kolonlarını ekle
+    const tableDescription = await queryInterface.describeTable('Users');
+    
+    if (!tableDescription.resetToken) {
+      await queryInterface.addColumn('Users', 'resetToken', {
+        type: Sequelize.STRING,
+        allowNull: true,
+      });
+    }
+    
+    if (!tableDescription.resetExpires) {
+      await queryInterface.addColumn('Users', 'resetExpires', {
+        type: Sequelize.DATE,
+        allowNull: true,
+      });
+    }
   },
 
   async down(queryInterface) {

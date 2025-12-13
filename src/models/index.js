@@ -21,6 +21,8 @@ db.User = require('./user')(sequelize, DataTypes);
 db.Student = require('./student')(sequelize, DataTypes);
 db.Faculty = require('./faculty')(sequelize, DataTypes);
 db.Department = require('./department')(sequelize, DataTypes);
+db.AttendanceSession = require('./attendanceSession')(sequelize, DataTypes);
+db.AttendanceRecord = require('./attendanceRecord')(sequelize, DataTypes);
 
 Object.values(db).forEach((model) => {
   if (model.associate) {
