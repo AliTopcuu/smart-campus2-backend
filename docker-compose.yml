@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: campus
+      POSTGRES_USER: ranad
+      POSTGRES_PASSWORD: ranad
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ranad -d campus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    command: ["node", "src/server.js"]
+    environment:
+      DATABASE_URL: postgres://ranad:ranad@postgres:5432/campus
+      JWT_ACCESS_SECRET: dev-access-secret
+      JWT_REFRESH_SECRET: dev-refresh-secret
+      APP_BASE_URL: http://localhost:5173
+      CORS_ORIGIN: http://localhost:5173
+      
+      # --- GMAIL AYARLARI ---
+      MAIL_HOST: smtp.gmail.com
+      MAIL_PORT: 587
+      MAIL_USER: webprojeg@gmail.com  # <--- BURAYA KENDİ GMAIL ADRESİNİ YAZ
+      MAIL_PASS: Token_here           # <--- BURAYA GMAIL'DEN ALDIĞIN 16 HANELİ UYGULAMA ŞİFRESİNİ YAZ
+      MAIL_FROM: webprojeg@gmail.com  # <--- BURAYA YİNE KENDİ GMAIL ADRESİNİ YAZ
+      
+    ports:
+      - '5000:5000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
