@@ -1,9 +1,6 @@
 require('dotenv').config();
 
-// LOCAL: Docker container'ından bağlanıyoruz
-// .env dosyasında DATABASE_URL tanımlayın veya buradaki default değeri değiştirin
-// Docker PostgreSQL: postgres:yourPassword@localhost:5432/campus
-const defaultUrl = process.env.DATABASE_URL || 'postgres://postgres:yourPassword@localhost:5432/campus';
+const defaultUrl = process.env.DATABASE_URL || 'postgres://ranad:ranad@localhost:5432/campus';
 
 module.exports = {
   development: {

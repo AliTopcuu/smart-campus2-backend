@@ -21,8 +21,14 @@ db.User = require('./user')(sequelize, DataTypes);
 db.Student = require('./student')(sequelize, DataTypes);
 db.Faculty = require('./faculty')(sequelize, DataTypes);
 db.Department = require('./department')(sequelize, DataTypes);
-db.AttendanceSession = require('./attendanceSession')(sequelize, DataTypes);
-db.AttendanceRecord = require('./attendanceRecord')(sequelize, DataTypes);
+db.Course = require('./course')(sequelize, DataTypes);
+db.CoursePrerequisite = require('./courseprerequisite')(sequelize, DataTypes);
+db.Classroom = require('./classroom')(sequelize, DataTypes);
+db.CourseSection = require('./coursesection')(sequelize, DataTypes);
+db.Enrollment = require('./enrollment')(sequelize, DataTypes);
+db.AttendanceSession = require('./attendancesession')(sequelize, DataTypes);
+db.AttendanceRecord = require('./attendancerecord')(sequelize, DataTypes);
+db.ExcuseRequest = require('./excuserequest')(sequelize, DataTypes);
 
 Object.values(db).forEach((model) => {
   if (model.associate) {
