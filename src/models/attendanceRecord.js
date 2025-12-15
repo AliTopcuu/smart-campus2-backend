@@ -1,14 +1,7 @@
 'use strict';
-const {
-  Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class AttendanceRecord extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
       AttendanceRecord.belongsTo(models.AttendanceSession, { foreignKey: 'sessionId', as: 'session' });
       AttendanceRecord.belongsTo(models.User, { foreignKey: 'studentId', as: 'student' });
@@ -31,41 +24,41 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id'
       }
     },
-    checkInLat: {
-      type: DataTypes.DECIMAL(10, 8),
-      allowNull: false,
-      comment: 'Student check-in latitude'
-    },
-    checkInLng: {
-      type: DataTypes.DECIMAL(11, 8),
-      allowNull: false,
-      comment: 'Student check-in longitude'
-    },
-    distance: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-      comment: 'Distance from classroom in meters'
-    },
-    isWithinGeofence: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: true
-    },
-    checkedInAt: {
+    checkInTime: {
       type: DataTypes.DATE,
       allowNull: false,
       defaultValue: DataTypes.NOW
+    },
+    latitude: {
+      type: DataTypes.DECIMAL(10, 8),
+      allowNull: true
+    },
+    longitude: {
+      type: DataTypes.DECIMAL(11, 8),
+      allowNull: true
+    },
+    distanceFromCenter: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true
+    },
+    isFlagged: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    },
+    flagReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
     }
   }, {
     sequelize,
     modelName: 'AttendanceRecord',
-    tableName: 'AttendanceRecords',
     indexes: [
-      { fields: ['sessionId'] },
-      { fields: ['studentId'] },
-      { unique: true, fields: ['sessionId', 'studentId'], name: 'unique_student_session' }
+      {
+        unique: true,
+        fields: ['sessionId', 'studentId']
+      }
     ]
   });
   return AttendanceRecord;
 };
-

@@ -1,36 +1,24 @@
 'use strict';
-const {
-  Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class AttendanceSession extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      AttendanceSession.belongsTo(models.User, { foreignKey: 'createdBy', as: 'creator' });
+      AttendanceSession.belongsTo(models.CourseSection, { foreignKey: 'sectionId', as: 'section' });
+      AttendanceSession.belongsTo(models.User, { foreignKey: 'instructorId', as: 'instructor' });
       AttendanceSession.hasMany(models.AttendanceRecord, { foreignKey: 'sessionId', as: 'records' });
+      AttendanceSession.hasMany(models.ExcuseRequest, { foreignKey: 'sessionId', as: 'excuseRequests' });
     }
   }
   AttendanceSession.init({
-    code: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      unique: true
-    },
     sectionId: {
-      type: DataTypes.STRING,
+      type: DataTypes.INTEGER,
       allowNull: false,
-      comment: 'Section ID or course identifier'
+      references: {
+        model: 'CourseSections',
+        key: 'id'
+      }
     },
-    sectionName: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      comment: 'Section name for display'
-    },
-    createdBy: {
+    instructorId: {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
@@ -38,45 +26,44 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id'
       }
     },
-    locationLat: {
-      type: DataTypes.DECIMAL(10, 8),
-      allowNull: false,
-      comment: 'Latitude of the classroom location'
-    },
-    locationLng: {
-      type: DataTypes.DECIMAL(11, 8),
-      allowNull: false,
-      comment: 'Longitude of the classroom location'
-    },
-    geofenceRadius: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 250,
-      comment: 'Allowed radius in meters'
+    date: {
+      type: DataTypes.DATEONLY,
+      allowNull: false
     },
     startTime: {
-      type: DataTypes.DATE,
+      type: DataTypes.TIME,
       allowNull: false
     },
     endTime: {
-      type: DataTypes.DATE,
+      type: DataTypes.TIME,
+      allowNull: true
+    },
+    latitude: {
+      type: DataTypes.DECIMAL(10, 8),
       allowNull: false
     },
+    longitude: {
+      type: DataTypes.DECIMAL(11, 8),
+      allowNull: false
+    },
+    geofenceRadius: {
+      type: DataTypes.DECIMAL(8, 2),
+      allowNull: false,
+      defaultValue: 15.0
+    },
+    qrCode: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true
+    },
     status: {
-      type: DataTypes.ENUM('active', 'closed', 'expired'),
+      type: DataTypes.ENUM('active', 'closed', 'cancelled'),
+      allowNull: false,
       defaultValue: 'active'
     }
   }, {
     sequelize,
     modelName: 'AttendanceSession',
-    tableName: 'AttendanceSessions',
-    indexes: [
-      { fields: ['code'] },
-      { fields: ['createdBy'] },
-      { fields: ['status'] },
-      { fields: ['startTime', 'endTime'] }
-    ]
   });
   return AttendanceSession;
 };
-
