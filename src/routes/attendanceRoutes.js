@@ -29,6 +29,9 @@ router.post('/sessions/:sessionId/checkin', authorizeRole('student'), attendance
 // Öğrenciler kendi yoklama geçmişlerini görür
 router.get('/my-attendance', authorizeRole('student'), attendanceController.getMyAttendance);
 
+// Öğrenciler ders bazında yoklama durumlarını görür
+router.get('/my-attendance-by-course', authorizeRole('student'), attendanceController.getMyAttendanceByCourse);
+
 // Admin/Faculty yoklama raporunu görür
 router.get('/report/:sessionId', authorizeRole('admin', 'faculty'), attendanceController.getSessionReport);
 

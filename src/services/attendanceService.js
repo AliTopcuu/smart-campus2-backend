@@ -1,5 +1,5 @@
 const db = require('../models');
-const { ValidationError, ForbiddenError } = require('../utils/errors');
+const { AppError, ValidationError, ForbiddenError } = require('../utils/errors');
 const { Op } = require('sequelize');
 
 // Haversine formula ile mesafe hesaplama (metre cinsinden)
@@ -23,41 +23,58 @@ function generateSessionCode() {
 const attendanceService = {
   // Admin/Faculty yoklama oturumu oluşturur
   createSession: async (userId, sessionData) => {
-    const { sectionId, sectionName, locationLat, locationLng, geofenceRadius, duration } = sessionData;
+    const { sectionId, latitude, longitude, geofenceRadius, date, startTime, endTime } = sessionData;
 
-    if (!sectionId || !sectionName || !locationLat || !locationLng) {
-      throw new ValidationError('Section ID, section name, and location are required');
+    if (!sectionId || !latitude || !longitude) {
+      throw new ValidationError('Section ID and location are required');
     }
 
-    const code = generateSessionCode();
-    const startTime = new Date();
-    const endTime = new Date(startTime.getTime() + (duration || 30) * 60000); // Default 30 dakika
+    // Section bilgisini getir ve instructor kontrolü yap
+    const section = await db.CourseSection.findByPk(sectionId, {
+      include: [{ model: db.Course, as: 'course' }]
+    });
+
+    if (!section) {
+      throw new ValidationError('Section bulunamadı');
+    }
+
+    // Kullanıcının bu section'ın instructor'ı olduğunu kontrol et
+    if (section.instructorId !== userId) {
+      throw new ForbiddenError('Bu section için yetkiniz yok. Sadece kendi section\'larınıza yoklama başlatabilirsiniz.');
+    }
+
+    // QR kod oluştur (session ID ile birlikte)
+    const qrCode = generateSessionCode();
+    
+    // Tarih ve saat formatı
+    const sessionDate = date || new Date().toISOString().split('T')[0];
+    const sessionStartTime = startTime || new Date().toTimeString().split(' ')[0].substring(0, 5);
+    const sessionEndTime = endTime || null;
 
     const session = await db.AttendanceSession.create({
-      code,
       sectionId,
-      sectionName,
-      createdBy: userId,
-      locationLat: parseFloat(locationLat),
-      locationLng: parseFloat(locationLng),
+      instructorId: userId,
+      date: sessionDate,
+      startTime: sessionStartTime,
+      endTime: sessionEndTime,
+      latitude: parseFloat(latitude),
+      longitude: parseFloat(longitude),
       geofenceRadius: geofenceRadius || 250,
-      startTime,
-      endTime,
+      qrCode: qrCode,
       status: 'active'
     });
 
     return {
       id: session.id,
-      code: session.code,
+      qrCode: session.qrCode,
       sectionId: session.sectionId,
-      sectionName: session.sectionName,
-      location: {
-        lat: parseFloat(session.locationLat),
-        lng: parseFloat(session.locationLng)
-      },
-      geofenceRadius: session.geofenceRadius,
+      section: section,
+      date: session.date,
       startTime: session.startTime,
       endTime: session.endTime,
+      latitude: parseFloat(session.latitude),
+      longitude: parseFloat(session.longitude),
+      geofenceRadius: parseFloat(session.geofenceRadius),
       status: session.status
     };
   },
@@ -70,7 +87,7 @@ const attendanceService = {
       throw new ValidationError('Session not found');
     }
 
-    if (session.createdBy !== userId) {
+    if (session.instructorId !== userId) {
       throw new ForbiddenError('You can only close your own sessions');
     }
 
@@ -86,51 +103,89 @@ const attendanceService = {
   // Kullanıcının oluşturduğu oturumları listele
   getMySessions: async (userId) => {
     const sessions = await db.AttendanceSession.findAll({
-      where: { createdBy: userId },
-      order: [['startTime', 'DESC']],
-      include: [{
-        model: db.AttendanceRecord,
-        as: 'records',
-        include: [{
-          model: db.User,
-          as: 'student',
-          attributes: ['id', 'fullName', 'email'],
+      where: { instructorId: userId },
+      order: [['date', 'DESC'], ['startTime', 'DESC']],
+      include: [
+        {
+          model: db.CourseSection,
+          as: 'section',
           include: [{
-            model: db.Student,
-            attributes: ['studentNumber'],
-            required: false // LEFT JOIN - öğrenci kaydı olmayabilir
+            model: db.Course,
+            as: 'course'
           }]
-        }]
-      }]
+        },
+        {
+          model: db.AttendanceRecord,
+          as: 'records',
+          include: [{
+            model: db.User,
+            as: 'student',
+            attributes: ['id', 'fullName', 'email'],
+            include: [{
+              model: db.Student,
+              attributes: ['studentNumber'],
+              required: false // LEFT JOIN - öğrenci kaydı olmayabilir
+            }]
+          }]
+        }
+      ]
     });
 
-    return sessions.map(session => ({
-      id: session.id,
-      code: session.code,
-      sectionId: session.sectionId,
-      sectionName: session.sectionName,
-      location: {
-        lat: parseFloat(session.locationLat),
-        lng: parseFloat(session.locationLng)
-      },
-      geofenceRadius: session.geofenceRadius,
-      startTime: session.startTime,
-      endTime: session.endTime,
-      status: session.status,
-      recordCount: session.records?.length || 0,
-      records: session.records?.map(record => ({
-        id: record.id,
-        student: {
-          id: record.student?.id,
-          fullName: record.student?.fullName,
-          email: record.student?.email,
-          studentNumber: record.student?.Student?.studentNumber || null
+    return sessions.map(session => {
+      // Date ve Time'i birleştir
+      const sessionDate = new Date(session.date);
+      
+      // startTime ve endTime TIME tipinde (HH:mm:ss)
+      let startDateTime = null;
+      let endDateTime = null;
+      
+      if (session.startTime) {
+        const [startHours, startMinutes, startSeconds] = session.startTime.split(':').map(Number);
+        startDateTime = new Date(sessionDate);
+        startDateTime.setHours(startHours, startMinutes, startSeconds || 0, 0);
+      }
+      
+      if (session.endTime) {
+        const [endHours, endMinutes, endSeconds] = session.endTime.split(':').map(Number);
+        endDateTime = new Date(sessionDate);
+        endDateTime.setHours(endHours, endMinutes, endSeconds || 0, 0);
+      }
+      
+      return {
+        id: session.id,
+        qrCode: session.qrCode,
+        sectionId: session.sectionId,
+        sectionName: session.section?.course?.code 
+          ? `${session.section.course.code} - ${session.section.course.name}`
+          : `Section ${session.sectionId}`,
+        code: session.section?.course?.code || 'N/A',
+        location: {
+          lat: parseFloat(session.latitude),
+          lng: parseFloat(session.longitude)
         },
-        checkedInAt: record.checkedInAt,
-        distance: parseFloat(record.distance),
-        isWithinGeofence: record.isWithinGeofence
-      })) || []
-    }));
+        geofenceRadius: parseFloat(session.geofenceRadius),
+        date: session.date,
+        startTime: startDateTime ? startDateTime.toISOString() : null,
+        endTime: endDateTime ? endDateTime.toISOString() : null,
+        status: session.status,
+        recordCount: session.records?.length || 0,
+        records: session.records?.map(record => ({
+          id: record.id,
+          student: {
+            id: record.student?.id,
+            fullName: record.student?.fullName,
+            email: record.student?.email,
+            studentNumber: record.student?.Student?.studentNumber || null
+          },
+          checkInTime: record.checkInTime,
+          checkedInAt: record.checkInTime, // Backward compatibility
+          distanceFromCenter: record.distanceFromCenter ? parseFloat(record.distanceFromCenter) : null,
+          distance: record.distanceFromCenter ? parseFloat(record.distanceFromCenter) : null, // Backward compatibility
+          isFlagged: record.isFlagged || false,
+          isWithinGeofence: !record.isFlagged // Backward compatibility
+        })) || []
+      };
+    });
   },
 
   // Aktif oturumları listele (öğrenciler için)
@@ -172,33 +227,53 @@ const attendanceService = {
   // Oturum detayını getir
   getSessionById: async (sessionId) => {
     const session = await db.AttendanceSession.findByPk(sessionId, {
-      include: [{
-        model: db.User,
-        as: 'creator',
-        attributes: ['id', 'fullName', 'email']
-      }]
+      include: [
+        {
+          model: db.User,
+          as: 'instructor',
+          attributes: ['id', 'fullName', 'email']
+        },
+        {
+          model: db.CourseSection,
+          as: 'section',
+          attributes: ['id'],
+          include: [{
+            model: db.Course,
+            as: 'course',
+            attributes: ['id', 'code', 'name']
+          }]
+        }
+      ]
     });
 
     if (!session) {
-      throw new ValidationError('Session not found');
+      throw new ValidationError('Yoklama oturumu bulunamadı');
+    }
+
+    // Section name'i dinamik olarak oluştur
+    let sectionName = 'Bilinmeyen Section';
+    if (session.section && session.section.course) {
+      const courseCode = session.section.course.code || '';
+      const courseName = session.section.course.name || '';
+      sectionName = `${courseCode} - ${courseName}`;
     }
 
     return {
       id: session.id,
-      code: session.code,
+      code: session.qrCode || session.code,
       sectionId: session.sectionId,
-      sectionName: session.sectionName,
+      sectionName: sectionName,
       location: {
-        lat: parseFloat(session.locationLat),
-        lng: parseFloat(session.locationLng)
+        lat: parseFloat(session.latitude),
+        lng: parseFloat(session.longitude)
       },
       geofenceRadius: session.geofenceRadius,
       startTime: session.startTime,
       endTime: session.endTime,
       status: session.status,
-      instructor: session.creator ? {
-        name: session.creator.fullName,
-        email: session.creator.email
+      instructor: session.instructor ? {
+        name: session.instructor.fullName,
+        email: session.instructor.email
       } : null
     };
   },
@@ -219,38 +294,54 @@ const attendanceService = {
     // Oturumu kontrol et
     const session = await db.AttendanceSession.findByPk(sessionId);
     if (!session) {
-      throw new ValidationError('Session not found');
+      throw new ValidationError('Yoklama oturumu bulunamadı');
     }
 
     // Oturum aktif mi ve zamanında mı kontrol et
     const now = new Date();
-    const startTime = new Date(session.startTime);
-    const endTime = new Date(session.endTime);
+    
+    // startTime ve endTime TIME tipinde (HH:mm:ss), date ile birleştir
+    const sessionDate = new Date(session.date);
+    const startTimeStr = session.startTime; // TIME format: "HH:mm:ss"
+    const endTimeStr = session.endTime; // TIME format: "HH:mm:ss" (nullable)
+    
+    // Date ve Time'i birleştir
+    const [startHours, startMinutes, startSeconds] = startTimeStr.split(':').map(Number);
+    const startTime = new Date(sessionDate);
+    startTime.setHours(startHours, startMinutes, startSeconds || 0, 0);
+    
+    let endTime = null;
+    if (endTimeStr) {
+      const [endHours, endMinutes, endSeconds] = endTimeStr.split(':').map(Number);
+      endTime = new Date(sessionDate);
+      endTime.setHours(endHours, endMinutes, endSeconds || 0, 0);
+    }
     
     console.log('⏰ Time check:', { 
       now: now.toISOString(), 
+      sessionDate: sessionDate.toISOString(),
       startTime: startTime.toISOString(), 
-      endTime: endTime.toISOString(),
+      endTime: endTime ? endTime.toISOString() : 'null',
       status: session.status,
       isBeforeStart: now < startTime,
-      isAfterEnd: now > endTime
+      isAfterEnd: endTime ? now > endTime : false
     });
 
     if (session.status !== 'active') {
       console.error('❌ Session not active:', session.status);
-      throw new ValidationError(`Session is not active. Current status: ${session.status}`);
+      throw new ValidationError(`Oturum aktif değil. Mevcut durum: ${session.status}`);
     }
 
     if (now < startTime) {
       console.error('❌ Session not started yet');
       const timeUntilStart = Math.round((startTime - now) / 1000 / 60); // minutes
-      throw new ValidationError(`Session has not started yet. Start time: ${startTime.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })} (${timeUntilStart} minutes remaining)`);
+      throw new ValidationError(`Oturum henüz başlamadı. Başlangıç saati: ${startTime.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })} (${timeUntilStart} dakika kaldı)`);
     }
 
-    if (now > endTime) {
+    if (endTime && now > endTime) {
       console.error('❌ Session expired');
       const timeSinceEnd = Math.round((now - endTime) / 1000 / 60); // minutes
-      throw new ValidationError(`Session has expired. End time: ${endTime.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })} (${timeSinceEnd} minutes ago)`);
+      throw new ValidationError(`Oturum süresi doldu. Bitiş saati: ${endTime.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })} (${timeSinceEnd} dakika önce)`);
     }
 
     // Daha önce katılmış mı kontrol et
@@ -262,14 +353,14 @@ const attendanceService = {
     });
 
     if (existingRecord) {
-      throw new ValidationError('You have already checked in to this session');
+      throw new ValidationError('Bu oturuma zaten katıldınız');
     }
 
     // Mesafe hesapla
     const parsedLat = parseFloat(lat);
     const parsedLng = parseFloat(longitude);
-    const parsedSessionLat = parseFloat(session.locationLat);
-    const parsedSessionLng = parseFloat(session.locationLng);
+    const parsedSessionLat = parseFloat(session.latitude);
+    const parsedSessionLng = parseFloat(session.longitude);
 
     console.log('📐 Parsed coordinates:', { 
       parsedLat, 
@@ -282,7 +373,7 @@ const attendanceService = {
     // Koordinatların geçerli olduğunu kontrol et
     if (isNaN(parsedLat) || isNaN(parsedLng) || isNaN(parsedSessionLat) || isNaN(parsedSessionLng)) {
       console.error('❌ Invalid coordinates:', { parsedLat, parsedLng, parsedSessionLat, parsedSessionLng });
-      throw new ValidationError('Invalid location coordinates');
+      throw new ValidationError('Geçersiz konum koordinatları');
     }
 
     const distance = calculateDistance(
@@ -297,7 +388,7 @@ const attendanceService = {
     // Mesafe değerinin geçerli olduğunu kontrol et
     if (isNaN(distance) || distance < 0) {
       console.error('❌ Invalid distance:', distance);
-      throw new ValidationError(`Invalid distance calculation: ${distance}`);
+      throw new ValidationError(`Geçersiz mesafe hesaplaması: ${distance}`);
     }
 
     const isWithinGeofence = distance <= session.geofenceRadius;
@@ -306,26 +397,27 @@ const attendanceService = {
     // Geofence kontrolü - dışındaysa hata ver
     if (!isWithinGeofence) {
       console.error('❌ Outside geofence:', { distance, geofenceRadius: session.geofenceRadius });
-      throw new ValidationError(`You are outside the geofence area. Distance: ${Math.round(distance)}m, Required: ${session.geofenceRadius}m`);
+      throw new ValidationError(`Geofence bölgesinin dışındasınız. Mesafe: ${Math.round(distance)}m, Gerekli: ${session.geofenceRadius}m`);
     }
 
     // Kayıt oluştur
     const record = await db.AttendanceRecord.create({
       sessionId: session.id,
       studentId: userId,
-      checkInLat: parsedLat,
-      checkInLng: parsedLng,
-      distance: distance,
-      isWithinGeofence: isWithinGeofence,
-      checkedInAt: now
+      latitude: parsedLat,
+      longitude: parsedLng,
+      distanceFromCenter: distance,
+      isFlagged: !isWithinGeofence,
+      flagReason: !isWithinGeofence ? `Geofence dışında. Mesafe: ${Math.round(distance)}m` : null,
+      checkInTime: now
     });
 
     return {
       id: record.id,
       sessionId: record.sessionId,
-      distance: parseFloat(record.distance),
-      isWithinGeofence: record.isWithinGeofence,
-      checkedInAt: record.checkedInAt
+      distance: parseFloat(record.distanceFromCenter),
+      isWithinGeofence: !record.isFlagged,
+      checkedInAt: record.checkInTime
     };
   },
 
@@ -336,34 +428,193 @@ const attendanceService = {
       include: [{
         model: db.AttendanceSession,
         as: 'session',
-        include: [{
-          model: db.User,
-          as: 'creator',
-          attributes: ['id', 'fullName', 'email']
-        }]
+        include: [
+          {
+            model: db.User,
+            as: 'instructor',
+            attributes: ['id', 'fullName', 'email']
+          },
+          {
+            model: db.CourseSection,
+            as: 'section',
+            attributes: ['id', 'sectionNumber'],
+            include: [{
+              model: db.Course,
+              as: 'course',
+              attributes: ['id', 'code', 'name']
+            }]
+          }
+        ]
       }],
-      order: [['checkedInAt', 'DESC']]
+      order: [['checkInTime', 'DESC']]
     });
 
-    return records.map(record => ({
-      id: record.id,
-      session: {
-        id: record.session.id,
-        code: record.session.code,
-        sectionId: record.session.sectionId,
-        sectionName: record.session.sectionName,
-        startTime: record.session.startTime,
-        endTime: record.session.endTime,
-        geofenceRadius: record.session.geofenceRadius,
-        instructor: record.session.creator ? {
-          name: record.session.creator.fullName,
-          email: record.session.creator.email
-        } : null
+    return records.map(record => {
+      // Section name'i oluştur
+      let sectionName = 'Bilinmeyen Ders';
+      if (record.session?.section?.course) {
+        const courseCode = record.session.section.course.code || '';
+        const courseName = record.session.section.course.name || '';
+        sectionName = `${courseCode} - ${courseName}`;
+      }
+
+      // Date ve Time'i birleştir
+      let startDateTime = null;
+      let endDateTime = null;
+      
+      if (record.session?.date && record.session?.startTime) {
+        const sessionDate = new Date(record.session.date);
+        const [startHours, startMinutes, startSeconds] = record.session.startTime.split(':').map(Number);
+        startDateTime = new Date(sessionDate);
+        startDateTime.setHours(startHours, startMinutes, startSeconds || 0, 0);
+      }
+      
+      if (record.session?.date && record.session?.endTime) {
+        const sessionDate = new Date(record.session.date);
+        const [endHours, endMinutes, endSeconds] = record.session.endTime.split(':').map(Number);
+        endDateTime = new Date(sessionDate);
+        endDateTime.setHours(endHours, endMinutes, endSeconds || 0, 0);
+      }
+
+      return {
+        id: record.id,
+        session: {
+          id: record.session.id,
+          code: record.session.qrCode || record.session.code,
+          sectionId: record.session.sectionId,
+          sectionName: sectionName,
+          startTime: startDateTime ? startDateTime.toISOString() : null,
+          endTime: endDateTime ? endDateTime.toISOString() : null,
+          geofenceRadius: record.session.geofenceRadius,
+          instructor: record.session.instructor ? {
+            name: record.session.instructor.fullName,
+            email: record.session.instructor.email
+          } : null
+        },
+        checkInTime: record.checkInTime,
+        checkedInAt: record.checkInTime, // Backward compatibility
+        distance: record.distanceFromCenter ? parseFloat(record.distanceFromCenter) : null,
+        distanceFromCenter: record.distanceFromCenter ? parseFloat(record.distanceFromCenter) : null,
+        isWithinGeofence: !record.isFlagged,
+        isFlagged: record.isFlagged || false
+      };
+    });
+  },
+
+  // Öğrencinin ders bazında yoklama durumu
+  getMyAttendanceByCourse: async (userId) => {
+    // Öğrencinin aldığı tüm dersleri getir
+    const enrollments = await db.Enrollment.findAll({
+      where: {
+        studentId: userId,
+        status: 'enrolled' // Sadece aktif kayıtlı dersler
       },
-      distance: parseFloat(record.distance),
-      isWithinGeofence: record.isWithinGeofence,
-      checkedInAt: record.checkedInAt
-    }));
+      include: [{
+        model: db.CourseSection,
+        as: 'section',
+        attributes: ['id', 'sectionNumber'],
+        include: [{
+          model: db.Course,
+          as: 'course',
+          attributes: ['id', 'code', 'name']
+        }]
+      }]
+    });
+
+    // Her ders için yoklama bilgilerini hesapla
+    const coursesWithAttendance = await Promise.all(
+      enrollments.map(async (enrollment) => {
+        const sectionId = enrollment.sectionId;
+        
+        // Bu section için tüm oturumları getir
+        const allSessions = await db.AttendanceSession.findAll({
+          where: { sectionId },
+          order: [['date', 'DESC'], ['startTime', 'DESC']],
+          attributes: ['id', 'date', 'startTime', 'endTime', 'status', 'qrCode']
+        });
+
+        // Öğrencinin bu section'daki katıldığı oturumları getir
+        const attendanceRecords = await db.AttendanceRecord.findAll({
+          where: {
+            studentId: userId,
+            sessionId: { [db.Sequelize.Op.in]: allSessions.map(s => s.id) }
+          },
+          attributes: ['id', 'sessionId', 'checkInTime']
+        });
+
+        // Katıldığı oturum ID'lerini set olarak tut
+        const attendedSessionIds = new Set(attendanceRecords.map(r => r.sessionId));
+        
+        // Oturum detaylarını hazırla
+        const now = new Date();
+        const sessions = allSessions.map(session => {
+          const record = attendanceRecords.find(r => r.sessionId === session.id);
+          
+          // Date ve Time'i birleştir
+          let startDateTime = null;
+          let endDateTime = null;
+          
+          if (session.date && session.startTime) {
+            const sessionDate = new Date(session.date);
+            const [startHours, startMinutes, startSeconds] = session.startTime.split(':').map(Number);
+            startDateTime = new Date(sessionDate);
+            startDateTime.setHours(startHours, startMinutes, startSeconds || 0, 0);
+          }
+          
+          if (session.date && session.endTime) {
+            const sessionDate = new Date(session.date);
+            const [endHours, endMinutes, endSeconds] = session.endTime.split(':').map(Number);
+            endDateTime = new Date(sessionDate);
+            endDateTime.setHours(endHours, endMinutes, endSeconds || 0, 0);
+          }
+
+          // Oturum durumunu kontrol et (tarih/saat bazlı)
+          let actualStatus = session.status;
+          if (session.status === 'active') {
+            // Eğer oturum bitiş zamanı geçmişse, kapalı olarak işaretle
+            if (endDateTime && now > endDateTime) {
+              actualStatus = 'closed';
+            }
+            // Eğer oturum başlangıç zamanı henüz gelmemişse, bekliyor olarak işaretle
+            else if (startDateTime && now < startDateTime) {
+              actualStatus = 'pending';
+            }
+          }
+
+          return {
+            id: session.id,
+            date: session.date,
+            startTime: startDateTime ? startDateTime.toISOString() : null,
+            endTime: endDateTime ? endDateTime.toISOString() : null,
+            status: actualStatus,
+            code: session.qrCode,
+            attended: attendedSessionIds.has(session.id),
+            checkInTime: record ? record.checkInTime : null
+          };
+        });
+
+        const totalSessions = allSessions.length;
+        const attendedCount = attendanceRecords.length;
+        const attendancePercentage = totalSessions > 0 
+          ? Math.round((attendedCount / totalSessions) * 100) 
+          : 0;
+
+        return {
+          sectionId: sectionId,
+          course: {
+            code: enrollment.section.course.code,
+            name: enrollment.section.course.name
+          },
+          sectionNumber: enrollment.section.sectionNumber,
+          totalSessions,
+          attendedCount,
+          attendancePercentage,
+          sessions
+        };
+      })
+    );
+
+    return coursesWithAttendance;
   },
 
   // Section için yoklama raporu (hoca için)
@@ -384,7 +635,7 @@ const attendanceService = {
       throw new ValidationError('Session not found');
     }
 
-    if (session.createdBy !== userId) {
+    if (session.instructorId !== userId) {
       throw new ForbiddenError('You can only view reports for your own sessions');
     }
 

@@ -18,8 +18,25 @@ const allowedOrigins = process.env.CORS_ORIGIN
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        // Allow localhost with any port
+        if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-retry'],
+    exposedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
@@ -29,8 +46,6 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
-
-app.use(express.json());
 
 app.use(morgan('dev'));
 
@@ -49,7 +64,8 @@ app.use((req, res) => {
 // Hata yakalama
 app.use((err, _req, res, _next) => {
   console.error('🔥 Server Error:', err);
-  const status = err.statusCode || 500;
+  console.error('Error stack:', err.stack);
+  const status = err.statusCode || err.status || 500;
   res.status(status).json({
     message: err.message || 'Beklenmeyen bir hata oluştu',
   });

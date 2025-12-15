@@ -2,6 +2,7 @@ const db = require('../models');
 const { Enrollment, CourseSection, Course, User, AttendanceRecord, AttendanceSession, CoursePrerequisite } = db;
 const { Op } = db.Sequelize;
 const { fn, col, literal } = db.sequelize;
+const { AppError } = require('../utils/errors');
 
 // Recursive prerequisite checking
 const checkPrerequisites = async (courseId, studentId) => {
@@ -844,21 +845,27 @@ const approveEnrollment = async (enrollmentId, userId, userRole) => {
   });
 
   if (!enrollment) {
-    throw new Error('Enrollment not found');
+    throw new AppError('Kayıt bulunamadı', 404);
+  }
+
+  if (!enrollment.section) {
+    throw new AppError('Bu kayıt için section bulunamadı', 404);
   }
 
   if (enrollment.status !== 'pending') {
-    throw new Error('Only pending enrollments can be approved');
+    throw new AppError('Sadece bekleyen kayıtlar onaylanabilir', 400);
   }
 
   // Verify instructor owns this section (or user is admin)
   if (userRole !== 'admin' && enrollment.section.instructorId !== userId) {
-    throw new Error('You are not the instructor of this section');
+    throw new AppError('Bu section için yetkiniz yok. Sadece kendi section\'larınızı onaylayabilirsiniz.', 403);
   }
 
   // Check capacity
-  if (enrollment.section.enrolledCount >= enrollment.section.capacity) {
-    throw new Error('Section is full. Cannot approve more enrollments.');
+  const currentEnrolled = enrollment.section.enrolledCount || 0;
+  const capacity = enrollment.section.capacity || 0;
+  if (capacity > 0 && currentEnrolled >= capacity) {
+    throw new AppError('Section dolu. Daha fazla kayıt onaylanamaz.', 400);
   }
 
   // Use transaction to ensure atomicity
@@ -868,10 +875,11 @@ const approveEnrollment = async (enrollmentId, userId, userRole) => {
     // Update enrollment status
     await enrollment.update({ status: 'enrolled' }, { transaction });
 
-    // Increase section capacity
+    // Increase section enrolledCount
+    // Use raw query to ensure transaction works correctly
     await db.sequelize.query(
       `UPDATE "CourseSections" 
-       SET "enrolledCount" = "enrolledCount" + 1 
+       SET "enrolledCount" = COALESCE("enrolledCount", 0) + 1 
        WHERE id = :sectionId`,
       {
         replacements: { sectionId: enrollment.sectionId },
@@ -896,7 +904,14 @@ const approveEnrollment = async (enrollmentId, userId, userRole) => {
     };
   } catch (error) {
     await transaction.rollback();
-    throw error;
+    console.error('Error in approveEnrollment:', error);
+    console.error('Error stack:', error.stack);
+    // If it's already an AppError, just rethrow it
+    if (error.statusCode) {
+      throw error;
+    }
+    // Otherwise, wrap it in an AppError
+    throw new AppError(error.message || 'Kayıt onaylanırken bir hata oluştu', 500);
   }
 };
 

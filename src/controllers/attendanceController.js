@@ -63,6 +63,15 @@ const getMyAttendance = async (req, res, next) => {
   }
 };
 
+const getMyAttendanceByCourse = async (req, res, next) => {
+  try {
+    const result = await attendanceService.getMyAttendanceByCourse(req.user.id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getSessionReport = async (req, res, next) => {
   try {
     const result = await attendanceService.getSessionReport(req.params.sessionId, req.user.id);
@@ -80,6 +89,7 @@ module.exports = {
   getSessionById,
   checkIn,
   getMyAttendance,
+  getMyAttendanceByCourse,
   getSessionReport
 };
 
