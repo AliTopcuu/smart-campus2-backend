@@ -132,23 +132,23 @@ const attendanceService = {
     });
 
     return sessions.map(session => {
-      // Date ve Time'i birleştir
-      const sessionDate = new Date(session.date);
-      
-      // startTime ve endTime TIME tipinde (HH:mm:ss)
+      // Date ve Time'i birleştir - Türkiye timezone (GMT+3) için
+      // Tarih string'ini (YYYY-MM-DD) ve saat string'ini (HH:mm:ss) birleştir
       let startDateTime = null;
       let endDateTime = null;
       
       if (session.startTime) {
         const [startHours, startMinutes, startSeconds] = session.startTime.split(':').map(Number);
-        startDateTime = new Date(sessionDate);
-        startDateTime.setHours(startHours, startMinutes, startSeconds || 0, 0);
+        // Tarih ve saati birleştir, Türkiye timezone'unda (GMT+3) yorumla
+        // ISO string formatında: YYYY-MM-DDTHH:mm:ss+03:00
+        const dateTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
+        startDateTime = new Date(dateTimeString);
       }
       
       if (session.endTime) {
         const [endHours, endMinutes, endSeconds] = session.endTime.split(':').map(Number);
-        endDateTime = new Date(sessionDate);
-        endDateTime.setHours(endHours, endMinutes, endSeconds || 0, 0);
+        const dateTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
+        endDateTime = new Date(dateTimeString);
       }
       
       return {
@@ -301,20 +301,20 @@ const attendanceService = {
     const now = new Date();
     
     // startTime ve endTime TIME tipinde (HH:mm:ss), date ile birleştir
-    const sessionDate = new Date(session.date);
+    // Türkiye timezone (GMT+3) için
     const startTimeStr = session.startTime; // TIME format: "HH:mm:ss"
     const endTimeStr = session.endTime; // TIME format: "HH:mm:ss" (nullable)
     
-    // Date ve Time'i birleştir
+    // Date ve Time'i birleştir - Türkiye timezone'unda (GMT+3)
     const [startHours, startMinutes, startSeconds] = startTimeStr.split(':').map(Number);
-    const startTime = new Date(sessionDate);
-    startTime.setHours(startHours, startMinutes, startSeconds || 0, 0);
+    const startTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
+    const startTime = new Date(startTimeString);
     
     let endTime = null;
     if (endTimeStr) {
       const [endHours, endMinutes, endSeconds] = endTimeStr.split(':').map(Number);
-      endTime = new Date(sessionDate);
-      endTime.setHours(endHours, endMinutes, endSeconds || 0, 0);
+      const endTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
+      endTime = new Date(endTimeString);
     }
     
     console.log('⏰ Time check:', { 
@@ -458,22 +458,20 @@ const attendanceService = {
         sectionName = `${courseCode} - ${courseName}`;
       }
 
-      // Date ve Time'i birleştir
+      // Date ve Time'i birleştir - Türkiye timezone (GMT+3) için
       let startDateTime = null;
       let endDateTime = null;
       
       if (record.session?.date && record.session?.startTime) {
-        const sessionDate = new Date(record.session.date);
         const [startHours, startMinutes, startSeconds] = record.session.startTime.split(':').map(Number);
-        startDateTime = new Date(sessionDate);
-        startDateTime.setHours(startHours, startMinutes, startSeconds || 0, 0);
+        const dateTimeString = `${record.session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
+        startDateTime = new Date(dateTimeString);
       }
       
       if (record.session?.date && record.session?.endTime) {
-        const sessionDate = new Date(record.session.date);
         const [endHours, endMinutes, endSeconds] = record.session.endTime.split(':').map(Number);
-        endDateTime = new Date(sessionDate);
-        endDateTime.setHours(endHours, endMinutes, endSeconds || 0, 0);
+        const dateTimeString = `${record.session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
+        endDateTime = new Date(dateTimeString);
       }
 
       return {
@@ -550,22 +548,20 @@ const attendanceService = {
         const sessions = allSessions.map(session => {
           const record = attendanceRecords.find(r => r.sessionId === session.id);
           
-          // Date ve Time'i birleştir
+          // Date ve Time'i birleştir - Türkiye timezone (GMT+3) için
           let startDateTime = null;
           let endDateTime = null;
           
           if (session.date && session.startTime) {
-            const sessionDate = new Date(session.date);
             const [startHours, startMinutes, startSeconds] = session.startTime.split(':').map(Number);
-            startDateTime = new Date(sessionDate);
-            startDateTime.setHours(startHours, startMinutes, startSeconds || 0, 0);
+            const dateTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
+            startDateTime = new Date(dateTimeString);
           }
           
           if (session.date && session.endTime) {
-            const sessionDate = new Date(session.date);
             const [endHours, endMinutes, endSeconds] = session.endTime.split(':').map(Number);
-            endDateTime = new Date(sessionDate);
-            endDateTime.setHours(endHours, endMinutes, endSeconds || 0, 0);
+            const dateTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
+            endDateTime = new Date(dateTimeString);
           }
 
           // Oturum durumunu kontrol et (tarih/saat bazlı)
