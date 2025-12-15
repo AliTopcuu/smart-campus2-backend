@@ -258,6 +258,22 @@ const attendanceService = {
       sectionName = `${courseCode} - ${courseName}`;
     }
 
+    // Date ve Time'i birleştir - Türkiye timezone (GMT+3) için
+    let startDateTime = null;
+    let endDateTime = null;
+    
+    if (session.startTime) {
+      const [startHours, startMinutes, startSeconds] = session.startTime.split(':').map(Number);
+      const dateTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
+      startDateTime = new Date(dateTimeString);
+    }
+    
+    if (session.endTime) {
+      const [endHours, endMinutes, endSeconds] = session.endTime.split(':').map(Number);
+      const dateTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
+      endDateTime = new Date(dateTimeString);
+    }
+
     return {
       id: session.id,
       code: session.qrCode || session.code,
@@ -268,8 +284,8 @@ const attendanceService = {
         lng: parseFloat(session.longitude)
       },
       geofenceRadius: session.geofenceRadius,
-      startTime: session.startTime,
-      endTime: session.endTime,
+      startTime: startDateTime ? startDateTime.toISOString() : null,
+      endTime: endDateTime ? endDateTime.toISOString() : null,
       status: session.status,
       instructor: session.instructor ? {
         name: session.instructor.fullName,
@@ -319,7 +335,7 @@ const attendanceService = {
     
     console.log('⏰ Time check:', { 
       now: now.toISOString(), 
-      sessionDate: sessionDate.toISOString(),
+      sessionDate: session.date,
       startTime: startTime.toISOString(), 
       endTime: endTime ? endTime.toISOString() : 'null',
       status: session.status,
