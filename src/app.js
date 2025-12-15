@@ -28,6 +28,9 @@ app.use(
         // Allow localhost with any port
         if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
           callback(null, true);
+        } else if (origin.includes('.railway.app') || origin.includes('.up.railway.app')) {
+          // Allow Railway domains for production
+          callback(null, true);
         } else {
           callback(new Error('Not allowed by CORS'));
         }

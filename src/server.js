@@ -14,8 +14,8 @@ const start = async () => {
       await db.sequelize.sync();
       console.log('✅ Veritabanı bağlantısı BAŞARILI');
 
-      app.listen(PORT, () => {
-        console.log(`🚀 Backend API çalışıyor: http://localhost:${PORT}`);
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Backend API çalışıyor: http://0.0.0.0:${PORT}`);
       });
       return; // Success, exit the function
     } catch (err) {
