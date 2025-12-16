@@ -442,6 +442,156 @@ const attendanceService = {
     };
   },
 
+  // Öğrenci kod ile yoklamaya katılır
+  checkInByCode: async (qrCode, userId, checkInData) => {
+    console.log('🔍 checkInByCode called:', { qrCode, userId, checkInData });
+    const { lat, lng, lon } = checkInData;
+    const longitude = lng || lon; // Support both lng and lon
+
+    console.log('📍 Coordinates:', { lat, lng, lon, longitude });
+
+    if (!lat || !longitude) {
+      console.error('❌ Missing coordinates:', { lat, lng, lon, longitude });
+      throw new ValidationError('Location coordinates are required');
+    }
+
+    if (!qrCode) {
+      throw new ValidationError('QR kod gereklidir');
+    }
+
+    // QR kod ile oturumu bul
+    const session = await db.AttendanceSession.findOne({
+      where: { qrCode: qrCode }
+    });
+
+    if (!session) {
+      throw new ValidationError('Geçersiz QR kod. Yoklama oturumu bulunamadı.');
+    }
+
+    // Oturum aktif mi ve zamanında mı kontrol et
+    const now = new Date();
+    
+    // startTime ve endTime TIME tipinde (HH:mm:ss), date ile birleştir
+    // Türkiye timezone (GMT+3) için
+    const startTimeStr = session.startTime; // TIME format: "HH:mm:ss"
+    const endTimeStr = session.endTime; // TIME format: "HH:mm:ss" (nullable)
+    
+    // Date ve Time'i birleştir - Türkiye timezone'unda (GMT+3)
+    const [startHours, startMinutes, startSeconds] = startTimeStr.split(':').map(Number);
+    const startTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
+    const startTime = new Date(startTimeString);
+    
+    let endTime = null;
+    if (endTimeStr) {
+      const [endHours, endMinutes, endSeconds] = endTimeStr.split(':').map(Number);
+      const endTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
+      endTime = new Date(endTimeString);
+    }
+    
+    console.log('⏰ Time check:', { 
+      now: now.toISOString(), 
+      sessionDate: session.date,
+      startTime: startTime.toISOString(), 
+      endTime: endTime ? endTime.toISOString() : 'null',
+      status: session.status,
+      isBeforeStart: now < startTime,
+      isAfterEnd: endTime ? now > endTime : false
+    });
+
+    if (session.status !== 'active') {
+      console.error('❌ Session not active:', session.status);
+      throw new ValidationError(`Oturum aktif değil. Mevcut durum: ${session.status}`);
+    }
+
+    if (now < startTime) {
+      console.error('❌ Session not started yet');
+      const timeUntilStart = Math.round((startTime - now) / 1000 / 60); // minutes
+      throw new ValidationError(`Oturum henüz başlamadı. Başlangıç saati: ${startTime.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })} (${timeUntilStart} dakika kaldı)`);
+    }
+
+    if (endTime && now > endTime) {
+      console.error('❌ Session expired');
+      const timeSinceEnd = Math.round((now - endTime) / 1000 / 60); // minutes
+      throw new ValidationError(`Oturum süresi doldu. Bitiş saati: ${endTime.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })} (${timeSinceEnd} dakika önce)`);
+    }
+
+    // Daha önce katılmış mı kontrol et
+    const existingRecord = await db.AttendanceRecord.findOne({
+      where: {
+        sessionId: session.id,
+        studentId: userId
+      }
+    });
+
+    if (existingRecord) {
+      throw new ValidationError('Bu oturuma zaten katıldınız');
+    }
+
+    // Mesafe hesapla
+    const parsedLat = parseFloat(lat);
+    const parsedLng = parseFloat(longitude);
+    const parsedSessionLat = parseFloat(session.latitude);
+    const parsedSessionLng = parseFloat(session.longitude);
+
+    console.log('📐 Parsed coordinates:', { 
+      parsedLat, 
+      parsedLng, 
+      parsedSessionLat, 
+      parsedSessionLng,
+      geofenceRadius: session.geofenceRadius
+    });
+
+    // Koordinatların geçerli olduğunu kontrol et
+    if (isNaN(parsedLat) || isNaN(parsedLng) || isNaN(parsedSessionLat) || isNaN(parsedSessionLng)) {
+      console.error('❌ Invalid coordinates:', { parsedLat, parsedLng, parsedSessionLat, parsedSessionLng });
+      throw new ValidationError('Geçersiz konum koordinatları');
+    }
+
+    const distance = calculateDistance(
+      parsedLat,
+      parsedLng,
+      parsedSessionLat,
+      parsedSessionLng
+    );
+
+    console.log('📏 Calculated distance:', distance, 'm');
+
+    // Mesafe değerinin geçerli olduğunu kontrol et
+    if (isNaN(distance) || distance < 0) {
+      console.error('❌ Invalid distance:', distance);
+      throw new ValidationError(`Geçersiz mesafe hesaplaması: ${distance}`);
+    }
+
+    const isWithinGeofence = distance <= session.geofenceRadius;
+    console.log('✅ Geofence check:', { distance, geofenceRadius: session.geofenceRadius, isWithinGeofence });
+
+    // Geofence kontrolü - dışındaysa hata ver
+    if (!isWithinGeofence) {
+      console.error('❌ Outside geofence:', { distance, geofenceRadius: session.geofenceRadius });
+      throw new ValidationError(`Geofence bölgesinin dışındasınız. Mesafe: ${Math.round(distance)}m, Gerekli: ${session.geofenceRadius}m`);
+    }
+
+    // Kayıt oluştur
+    const record = await db.AttendanceRecord.create({
+      sessionId: session.id,
+      studentId: userId,
+      latitude: parsedLat,
+      longitude: parsedLng,
+      distanceFromCenter: distance,
+      isFlagged: !isWithinGeofence,
+      flagReason: !isWithinGeofence ? `Geofence dışında. Mesafe: ${Math.round(distance)}m` : null,
+      checkInTime: now
+    });
+
+    return {
+      id: record.id,
+      sessionId: record.sessionId,
+      distance: parseFloat(record.distanceFromCenter),
+      isWithinGeofence: !record.isFlagged,
+      checkedInAt: record.checkInTime
+    };
+  },
+
   // Öğrencinin yoklama geçmişi
   getMyAttendance: async (userId) => {
     const records = await db.AttendanceRecord.findAll({

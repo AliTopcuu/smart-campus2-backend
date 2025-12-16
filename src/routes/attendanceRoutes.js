@@ -49,6 +49,9 @@ router.get('/sessions/:sessionId', attendanceController.getSessionById);
 // Öğrenciler yoklamaya katılır
 router.post('/sessions/:sessionId/checkin', authorizeRole('student'), attendanceController.checkIn);
 
+// Öğrenciler kod ile yoklamaya katılır
+router.post('/sessions/code/:code/checkin', authorizeRole('student'), attendanceController.checkInByCode);
+
 // Öğrenciler kendi yoklama geçmişlerini görür
 router.get('/my-attendance', authorizeRole('student'), attendanceController.getMyAttendance);
 

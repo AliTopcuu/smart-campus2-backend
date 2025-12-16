@@ -54,6 +54,15 @@ const checkIn = async (req, res, next) => {
   }
 };
 
+const checkInByCode = async (req, res, next) => {
+  try {
+    const result = await attendanceService.checkInByCode(req.params.code, req.user.id, req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getMyAttendance = async (req, res, next) => {
   try {
     const result = await attendanceService.getMyAttendance(req.user.id);
@@ -88,6 +97,7 @@ module.exports = {
   getActiveSessions,
   getSessionById,
   checkIn,
+  checkInByCode,
   getMyAttendance,
   getMyAttendanceByCourse,
   getSessionReport
