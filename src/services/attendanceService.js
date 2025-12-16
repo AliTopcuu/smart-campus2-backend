@@ -169,21 +169,26 @@ const attendanceService = {
         endTime: endDateTime ? endDateTime.toISOString() : null,
         status: session.status,
         recordCount: session.records?.length || 0,
-        records: session.records?.map(record => ({
-          id: record.id,
-          student: {
-            id: record.student?.id,
-            fullName: record.student?.fullName,
-            email: record.student?.email,
-            studentNumber: record.student?.Student?.studentNumber || null
-          },
-          checkInTime: record.checkInTime,
-          checkedInAt: record.checkInTime, // Backward compatibility
-          distanceFromCenter: record.distanceFromCenter ? parseFloat(record.distanceFromCenter) : null,
-          distance: record.distanceFromCenter ? parseFloat(record.distanceFromCenter) : null, // Backward compatibility
-          isFlagged: record.isFlagged || false,
-          isWithinGeofence: !record.isFlagged // Backward compatibility
-        })) || []
+        records: session.records?.map(record => {
+          const isExcused = record.flagReason && record.flagReason.includes('Mazeretli');
+          return {
+            id: record.id,
+            student: {
+              id: record.student?.id,
+              fullName: record.student?.fullName,
+              email: record.student?.email,
+              studentNumber: record.student?.Student?.studentNumber || null
+            },
+            checkInTime: record.checkInTime,
+            checkedInAt: record.checkInTime, // Backward compatibility
+            distanceFromCenter: record.distanceFromCenter ? parseFloat(record.distanceFromCenter) : null,
+            distance: record.distanceFromCenter ? parseFloat(record.distanceFromCenter) : null, // Backward compatibility
+            isFlagged: record.isFlagged || false,
+            isWithinGeofence: !record.isFlagged, // Backward compatibility
+            isExcused: isExcused || false,
+            flagReason: record.flagReason || null
+          };
+        }) || []
       };
     });
   },
@@ -553,7 +558,7 @@ const attendanceService = {
             studentId: userId,
             sessionId: { [db.Sequelize.Op.in]: allSessions.map(s => s.id) }
           },
-          attributes: ['id', 'sessionId', 'checkInTime']
+          attributes: ['id', 'sessionId', 'checkInTime', 'flagReason']
         });
 
         // Katıldığı oturum ID'lerini set olarak tut
@@ -593,6 +598,8 @@ const attendanceService = {
             }
           }
 
+          const isExcused = record && record.flagReason && record.flagReason.includes('Mazeretli');
+          
           return {
             id: session.id,
             date: session.date,
@@ -601,7 +608,9 @@ const attendanceService = {
             status: actualStatus,
             code: session.qrCode,
             attended: attendedSessionIds.has(session.id),
-            checkInTime: record ? record.checkInTime : null
+            checkInTime: record ? record.checkInTime : null,
+            isExcused: isExcused || false,
+            flagReason: record ? record.flagReason : null
           };
         });
 
