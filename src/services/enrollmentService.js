@@ -858,6 +858,8 @@ const myCourses = async (studentId) => {
         },
         section: {
           sectionNumber: enrollment.section.sectionNumber,
+          semester: enrollment.section.semester,
+          year: enrollment.section.year,
           instructor: enrollment.section.instructor?.fullName || 'TBA',
           scheduleText: scheduleJson
             ? formatScheduleText(scheduleJson)
