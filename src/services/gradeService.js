@@ -453,17 +453,27 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
       ? parseFloat(calculatedGradePoint) 
       : null;
 
-    // ÖNEMLİ DÜZELTME:
-    // status alanını update işlemine DAHİL ETMİYORUZ.
-    // Böylece öğrenci 'enrolled' olarak kalmaya devam eder ve listeden silinmez.
-    // Dönem sonunda toplu bir işlemle statüler güncellenebilir.
+    // Status'ü harf notuna göre güncelle
+    // Eğer harf notu girildiyse (hem midterm hem final girilmişse):
+    // - F ise -> 'failed'
+    // - F değilse (geçti) -> 'completed'
+    let newStatus = enrollment.status; // Varsayılan olarak mevcut status'ü koru
+    
+    if (letterGrade) {
+      // Harf notu girildi, status'ü güncelle
+      if (letterGrade.trim().toUpperCase() === 'F') {
+        newStatus = 'failed';
+      } else {
+        newStatus = 'completed'; // F değilse geçti
+      }
+    }
 
     await enrollment.update({
       midtermGrade,
       finalGrade,
       letterGrade,
-      gradePoint
-      // status: enrollment.status // Bunu kaldırdık, veritabanındaki mevcut değer kalsın.
+      gradePoint,
+      status: newStatus // Status'ü harf notuna göre güncelle
     });
   }
 
