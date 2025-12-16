@@ -3,12 +3,18 @@ const { Enrollment, CourseSection, Course, User } = db;
 const { Op } = db.Sequelize;
 
 // Calculate letter grade from numeric grade
+// Final notu girildiyse, midterm null olsa bile hesapla (midterm 0 olarak sayılır)
 const calculateLetterGrade = (midterm, final) => {
-  if (midterm === null || final === null) {
+  // Final notu mutlaka girilmiş olmalı
+  if (final === null || final === undefined || isNaN(final)) {
     return null;
   }
 
-  const total = (midterm * 0.4) + (final * 0.6);
+  // Midterm null ise 0 olarak kabul et
+  const midtermValue = (midterm !== null && midterm !== undefined && !isNaN(midterm)) ? midterm : 0;
+  const finalValue = final;
+
+  const total = (midtermValue * 0.4) + (finalValue * 0.6);
   
   if (total >= 90) return 'A';
   if (total >= 85) return 'A-';
@@ -445,7 +451,7 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
     const midtermGrade = gradeData.midtermGrade !== undefined ? parseFloat(gradeData.midtermGrade) : enrollment.midtermGrade;
     const finalGrade = gradeData.finalGrade !== undefined ? parseFloat(gradeData.finalGrade) : enrollment.finalGrade;
 
-    // Harf notu hesapla
+    // Harf notu hesapla - sadece final notu girildiyse de hesapla (midterm null olabilir)
     const letterGrade = calculateLetterGrade(midtermGrade, finalGrade);
     const calculatedGradePoint = letterGrade ? calculateGradePoint(letterGrade) : null;
     // Ensure gradePoint is a number, not a string
@@ -454,17 +460,24 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
       : null;
 
     // Status'ü harf notuna göre güncelle
-    // Eğer harf notu girildiyse (hem midterm hem final girilmişse):
+    // Eğer final notu girildiyse (harf notu hesaplanabildiyse):
     // - F ise -> 'failed'
     // - F değilse (geçti) -> 'completed'
     let newStatus = enrollment.status; // Varsayılan olarak mevcut status'ü koru
     
-    if (letterGrade) {
-      // Harf notu girildi, status'ü güncelle
-      if (letterGrade.trim().toUpperCase() === 'F') {
-        newStatus = 'failed';
+    // Final notu girildiyse (null değilse) ders tamamlanmış sayılır
+    if (finalGrade !== null && finalGrade !== undefined && !isNaN(finalGrade)) {
+      if (letterGrade) {
+        // Harf notu hesaplanabildi, status'ü güncelle
+        if (letterGrade.trim().toUpperCase() === 'F') {
+          newStatus = 'failed';
+        } else {
+          newStatus = 'completed'; // F değilse geçti
+        }
       } else {
-        newStatus = 'completed'; // F değilse geçti
+        // Final notu girildi ama harf notu hesaplanamadı (midterm null olabilir)
+        // Yine de ders tamamlanmış sayılır, status'ü 'completed' yap
+        newStatus = 'completed';
       }
     }
 
