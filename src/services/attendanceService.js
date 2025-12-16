@@ -59,7 +59,7 @@ const attendanceService = {
       endTime: sessionEndTime,
       latitude: parseFloat(latitude),
       longitude: parseFloat(longitude),
-      geofenceRadius: geofenceRadius || 250,
+      geofenceRadius: geofenceRadius || 15,
       qrCode: qrCode,
       status: 'active'
     });
@@ -690,10 +690,82 @@ const attendanceService = {
       }]
     });
 
+    // Öğrencinin check-in yaptığı tüm session'ları getir (enrollment kontrolü yapmadan)
+    const allAttendanceRecords = await db.AttendanceRecord.findAll({
+      where: { studentId: userId },
+      include: [{
+        model: db.AttendanceSession,
+        as: 'session',
+        attributes: ['id', 'sectionId', 'date', 'startTime', 'endTime', 'status', 'qrCode'],
+        include: [{
+          model: db.CourseSection,
+          as: 'section',
+          attributes: ['id', 'sectionNumber'],
+          include: [{
+            model: db.Course,
+            as: 'course',
+            attributes: ['id', 'code', 'name']
+          }]
+        }]
+      }]
+    });
+
+    // Check-in yapılan ama enrollment olmayan section'ları bul
+    const enrolledSectionIds = new Set(enrollments.map(e => e.sectionId));
+    const checkedInSectionIds = new Set(
+      allAttendanceRecords
+        .map(r => {
+          // Session varsa sectionId'yi al, yoksa null döndür
+          if (r.session && r.session.sectionId) {
+            return r.session.sectionId;
+          }
+          return null;
+        })
+        .filter(id => id !== null && !enrolledSectionIds.has(id))
+    );
+
+    // Enrollment olmayan ama check-in yapılan section'lar için fake enrollment'lar oluştur
+    const additionalSections = await db.CourseSection.findAll({
+      where: {
+        id: { [db.Sequelize.Op.in]: Array.from(checkedInSectionIds) }
+      },
+      attributes: ['id', 'sectionNumber'],
+      include: [{
+        model: db.Course,
+        as: 'course',
+        attributes: ['id', 'code', 'name']
+      }]
+    });
+
+    // Fake enrollment'ları ekle (sadece görüntüleme için)
+    const allSectionIds = new Set([
+      ...enrollments.map(e => e.sectionId),
+      ...Array.from(checkedInSectionIds)
+    ]);
+
     // Her ders için yoklama bilgilerini hesapla
     const coursesWithAttendance = await Promise.all(
-      enrollments.map(async (enrollment) => {
-        const sectionId = enrollment.sectionId;
+      Array.from(allSectionIds).map(async (sectionId) => {
+        const enrollment = enrollments.find(e => e.sectionId === sectionId);
+        const additionalSection = additionalSections.find(s => s.id === sectionId);
+        
+        // Section bilgisini al
+        let section;
+        let course;
+        let sectionNumber;
+        
+        if (enrollment) {
+          section = enrollment.section;
+          course = enrollment.section.course;
+          sectionNumber = enrollment.section.sectionNumber;
+        } else if (additionalSection) {
+          section = additionalSection;
+          course = additionalSection.course;
+          sectionNumber = additionalSection.sectionNumber;
+        } else {
+          // Section bulunamadıysa atla
+          return null;
+        }
         
         // Bu section için tüm oturumları getir
         const allSessions = await db.AttendanceSession.findAll({
@@ -773,10 +845,10 @@ const attendanceService = {
         return {
           sectionId: sectionId,
           course: {
-            code: enrollment.section.course.code,
-            name: enrollment.section.course.name
+            code: course.code,
+            name: course.name
           },
-          sectionNumber: enrollment.section.sectionNumber,
+          sectionNumber: sectionNumber,
           totalSessions,
           attendedCount,
           attendancePercentage,
@@ -785,7 +857,8 @@ const attendanceService = {
       })
     );
 
-    return coursesWithAttendance;
+    // Null değerleri filtrele
+    return coursesWithAttendance.filter(course => course !== null);
   },
 
   // Section için yoklama raporu (hoca için)
