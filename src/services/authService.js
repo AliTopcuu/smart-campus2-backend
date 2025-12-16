@@ -81,7 +81,12 @@ const register = async ({ fullName, email, password, role, studentNumber, depart
     });
   }
 
+  console.log(`[register] User created with ID: ${user.id}, email: ${email}`);
+  console.log(`[register] Calling sendVerificationEmail...`);
+  
   await sendVerificationEmail(email, verificationToken);
+  
+  console.log(`[register] Email sending process completed for: ${email}\n`);
 
   return {
     message: 'Registration successful. Check your email to verify your account.',
@@ -185,8 +190,11 @@ const invalidateUserSessions = (userId) => {
 };
 
 const forgotPassword = async (email) => {
+  console.log(`\n[forgotPassword] Request received for email: ${email}`);
+  
   const user = await User.findOne({ where: { email } });
   if (!user) {
+    console.log(`[forgotPassword] User not found for email: ${email}`);
     return { message: 'If the account exists, a reset link has been sent.' };
   }
 
@@ -196,7 +204,12 @@ const forgotPassword = async (email) => {
   user.resetExpires = resetExpires;
   await user.save();
 
+  console.log(`[forgotPassword] Reset token generated for user: ${user.id}, email: ${email}`);
+  console.log(`[forgotPassword] Calling sendResetPasswordEmail...`);
+  
   await sendResetPasswordEmail(email, resetToken);
+  
+  console.log(`[forgotPassword] Email sending process completed for: ${email}\n`);
   return { message: 'Reset instructions sent.' };
 };
 

@@ -9,7 +9,13 @@ const sendVerificationEmail = async (email, token) => {
   const verificationUrl = `${baseUrl}/verify-email?token=${token}`;
 
   if (!transporter) {
-    console.log('[mailer] Verification link:', verificationUrl);
+    console.log('\n========================================');
+    console.log('📧 EMAIL VERIFICATION LINK (NOT SENT - MAIL NOT CONFIGURED)');
+    console.log('========================================');
+    console.log(`To: ${email}`);
+    console.log(`Verification Link: ${verificationUrl}`);
+    console.log(`Token: ${token}`);
+    console.log('========================================\n');
     return;
   }
 
@@ -27,7 +33,13 @@ const sendResetPasswordEmail = async (email, token) => {
   const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
   if (!transporter) {
-    console.log('[mailer] Reset password link:', resetUrl);
+    console.log('\n========================================');
+    console.log('🔑 PASSWORD RESET LINK (NOT SENT - MAIL NOT CONFIGURED)');
+    console.log('========================================');
+    console.log(`To: ${email}`);
+    console.log(`Reset Password Link: ${resetUrl}`);
+    console.log(`Token: ${token}`);
+    console.log('========================================\n');
     return;
   }
 
