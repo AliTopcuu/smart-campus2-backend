@@ -5,8 +5,14 @@ const { fn, col, literal } = db.sequelize;
 const { AppError } = require('../utils/errors');
 
 // Recursive prerequisite checking
-const checkPrerequisites = async (courseId, studentId) => {
+const checkPrerequisites = async (courseId, studentId, visitedCourses = new Set()) => {
   try {
+    // Prevent infinite loops by tracking visited courses
+    if (visitedCourses.has(courseId)) {
+      return; // Already checked this course in this chain
+    }
+    visitedCourses.add(courseId);
+
     const prerequisites = await CoursePrerequisite.findAll({
       where: { courseId },
       include: [
@@ -23,11 +29,11 @@ const checkPrerequisites = async (courseId, studentId) => {
     }
 
     for (const prereq of prerequisites) {
-      // Check if student has completed this prerequisite
+      // Check if student has completed this prerequisite (status must be 'completed', not 'failed')
       const hasCompleted = await Enrollment.findOne({
         where: {
           studentId,
-          status: 'completed'
+          status: 'completed' // Sadece geçilen dersler ön koşul olarak kabul edilir
         },
         include: [
           {
@@ -43,12 +49,12 @@ const checkPrerequisites = async (courseId, studentId) => {
 
       if (!hasCompleted) {
         const prereqCourse = prereq.prerequisite;
-        const courseName = prereqCourse ? `${prereqCourse.code} - ${prereqCourse.name}` : 'Unknown';
-        throw new Error(`Prerequisite not met: ${courseName}`);
+        const courseName = prereqCourse ? `${prereqCourse.code} - ${prereqCourse.name}` : 'Bilinmeyen Ders';
+        throw new Error(`Bu dersi alamazsın. Ön koşul dersi tamamlanmamış: ${courseName}. Bu dersi geçmeden diğer dersi alamazsın.`);
       }
 
       // Recursive check for prerequisites of prerequisites
-      await checkPrerequisites(prereq.prerequisiteCourseId, studentId);
+      await checkPrerequisites(prereq.prerequisiteCourseId, studentId, visitedCourses);
     }
   } catch (error) {
     console.error('Error in checkPrerequisites:', error);

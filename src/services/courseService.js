@@ -76,7 +76,7 @@ const getById = async (courseId) => {
 };
 
 const create = async (courseData) => {
-  const { code, name, description, credits, ects, syllabusUrl, departmentId } = courseData;
+  const { code, name, description, credits, ects, syllabusUrl, departmentId, prerequisiteIds } = courseData;
 
   const course = await Course.create({
     code,
@@ -88,9 +88,50 @@ const create = async (courseData) => {
     departmentId: parseInt(departmentId)
   });
 
+  // Add prerequisites if provided
+  if (prerequisiteIds && Array.isArray(prerequisiteIds) && prerequisiteIds.length > 0) {
+    for (const prereqId of prerequisiteIds) {
+      // Prevent self-reference
+      if (prereqId === course.id) {
+        continue;
+      }
+      
+      // Check if prerequisite course exists
+      const prereqCourse = await Course.findByPk(prereqId);
+      if (prereqCourse) {
+        await CoursePrerequisite.create({
+          courseId: course.id,
+          prerequisiteCourseId: prereqId
+        });
+      }
+    }
+  }
+
+  // Return course with prerequisites
+  const courseWithPrereqs = await Course.findByPk(course.id, {
+    include: [
+      {
+        model: Department,
+        as: 'department',
+        attributes: ['id', 'name', 'code']
+      },
+      {
+        model: CoursePrerequisite,
+        as: 'prerequisites',
+        include: [
+          {
+            model: Course,
+            as: 'prerequisite',
+            attributes: ['id', 'code', 'name']
+          }
+        ]
+      }
+    ]
+  });
+
   return {
     message: 'Course created successfully',
-    course
+    course: courseWithPrereqs
   };
 };
 
@@ -100,7 +141,7 @@ const update = async (courseId, courseData) => {
     throw new Error('Course not found');
   }
 
-  const { code, name, description, credits, ects, syllabusUrl, departmentId } = courseData;
+  const { code, name, description, credits, ects, syllabusUrl, departmentId, prerequisiteIds } = courseData;
 
   await course.update({
     code: code || course.code,
@@ -112,9 +153,58 @@ const update = async (courseId, courseData) => {
     departmentId: departmentId ? parseInt(departmentId) : course.departmentId
   });
 
+  // Update prerequisites if provided
+  if (prerequisiteIds !== undefined) {
+    // Remove all existing prerequisites
+    await CoursePrerequisite.destroy({
+      where: { courseId: course.id }
+    });
+
+    // Add new prerequisites
+    if (Array.isArray(prerequisiteIds) && prerequisiteIds.length > 0) {
+      for (const prereqId of prerequisiteIds) {
+        // Prevent self-reference
+        if (prereqId === course.id) {
+          continue;
+        }
+        
+        // Check if prerequisite course exists
+        const prereqCourse = await Course.findByPk(prereqId);
+        if (prereqCourse) {
+          await CoursePrerequisite.create({
+            courseId: course.id,
+            prerequisiteCourseId: prereqId
+          });
+        }
+      }
+    }
+  }
+
+  // Return course with prerequisites
+  const courseWithPrereqs = await Course.findByPk(course.id, {
+    include: [
+      {
+        model: Department,
+        as: 'department',
+        attributes: ['id', 'name', 'code']
+      },
+      {
+        model: CoursePrerequisite,
+        as: 'prerequisites',
+        include: [
+          {
+            model: Course,
+            as: 'prerequisite',
+            attributes: ['id', 'code', 'name']
+          }
+        ]
+      }
+    ]
+  });
+
   return {
     message: 'Course updated successfully',
-    course
+    course: courseWithPrereqs
   };
 };
 
