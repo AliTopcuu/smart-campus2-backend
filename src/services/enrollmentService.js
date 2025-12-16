@@ -667,6 +667,7 @@ const myCourses = async (studentId) => {
       
       const returnData = {
         enrollmentId: enrollment.id,
+        sectionId: enrollment.sectionId, // Section ID'yi ekle
         status: enrollment.status, // Öğrenci dersin durumunu görsün (Tamamlandı/Kaldı/Devam Ediyor)
         course: {
           code: enrollment.section.course.code,
