@@ -23,6 +23,18 @@ const list = async (queryParams = {}) => {
         model: Department,
         as: 'department',
         attributes: ['id', 'name', 'code']
+      },
+      {
+        model: CoursePrerequisite,
+        as: 'prerequisites',
+        include: [
+          {
+            model: Course,
+            as: 'prerequisite',
+            attributes: ['id', 'code', 'name']
+          }
+        ],
+        required: false // LEFT JOIN - dersin ön koşulu olmayabilir
       }
     ],
     limit: parseInt(limit),
