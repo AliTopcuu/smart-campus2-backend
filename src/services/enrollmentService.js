@@ -29,11 +29,28 @@ const checkPrerequisites = async (courseId, studentId, visitedCourses = new Set(
     }
 
     for (const prereq of prerequisites) {
-      // Check if student has completed this prerequisite (status must be 'completed', not 'failed')
+      // Check if student has completed this prerequisite
+      // Ders tamamlanmış sayılır eğer:
+      // 1. Status 'completed' ise VEYA
+      // 2. letterGrade varsa (F hariç) VEYA
+      // 3. finalGrade girilmişse (not girilmişse)
       const hasCompleted = await Enrollment.findOne({
         where: {
           studentId,
-          status: 'completed' // Sadece geçilen dersler ön koşul olarak kabul edilir
+          [Op.or]: [
+            { status: 'completed' },
+            // letterGrade varsa ve F değilse completed sayılır
+            {
+              [Op.and]: [
+                { letterGrade: { [Op.ne]: null } },
+                { letterGrade: { [Op.ne]: 'F' } }
+              ]
+            },
+            // finalGrade girilmişse (not girilmişse) completed sayılır
+            {
+              finalGrade: { [Op.ne]: null }
+            }
+          ]
         },
         include: [
           {
