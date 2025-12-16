@@ -185,7 +185,14 @@ const enroll = async (studentId, sectionId) => {
                 semester: section.semester,
                 year: section.year
               },
-              attributes: ['id', 'scheduleJson']
+              include: [
+                {
+                  model: Course,
+                  as: 'course',
+                  attributes: ['id', 'code', 'name']
+                }
+              ],
+              attributes: ['id', 'scheduleJson', 'sectionNumber']
             }
           ]
         });
@@ -200,33 +207,105 @@ const enroll = async (studentId, sectionId) => {
           }
         }
 
-        if (scheduleJson && scheduleJson.days && Array.isArray(scheduleJson.days) && scheduleJson.startTime) {
-          for (const enrolledEnrollment of enrolledSections) {
-            let existingSchedule = enrolledEnrollment.section.scheduleJson;
-            if (typeof existingSchedule === 'string') {
-              try {
-                existingSchedule = JSON.parse(existingSchedule);
-              } catch (e) {
-                continue;
+        // Check for schedule conflicts (same logic as above)
+        if (scheduleJson) {
+          // New format: scheduleItems array
+          if (Array.isArray(scheduleJson.scheduleItems) && scheduleJson.scheduleItems.length > 0) {
+            for (const newItem of scheduleJson.scheduleItems) {
+              for (const enrolledEnrollment of enrolledSections) {
+                let existingSchedule = enrolledEnrollment.section.scheduleJson;
+                if (typeof existingSchedule === 'string') {
+                  try {
+                    existingSchedule = JSON.parse(existingSchedule);
+                  } catch (e) {
+                    continue;
+                  }
+                }
+                
+                if (!existingSchedule) continue;
+                
+                // Check new format
+                if (Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
+                  for (const existingItem of existingSchedule.scheduleItems) {
+                    if (newItem.day === existingItem.day) {
+                      const newStart = timeToMinutes(newItem.startTime);
+                      const newEnd = timeToMinutes(newItem.endTime);
+                      const existingStart = timeToMinutes(existingItem.startTime);
+                      const existingEnd = timeToMinutes(existingItem.endTime);
+                      
+                      if ((newStart < existingEnd && newEnd > existingStart)) {
+                        const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
+                        const courseName = enrolledEnrollment.section.course?.name || 'Ders';
+                        throw new Error(`Bu dersi alamazsın. ${courseCode} - ${courseName} dersi ile aynı gün ve saatte çakışıyor.`);
+                      }
+                    }
+                  }
+                }
+                // Check old format
+                else if (existingSchedule.days && Array.isArray(existingSchedule.days) && existingSchedule.startTime) {
+                  if (existingSchedule.days.includes(newItem.day)) {
+                    const newStart = timeToMinutes(newItem.startTime);
+                    const newEnd = timeToMinutes(newItem.endTime);
+                    const existingStart = timeToMinutes(existingSchedule.startTime);
+                    const existingEnd = timeToMinutes(existingSchedule.endTime);
+                    
+                    if ((newStart < existingEnd && newEnd > existingStart)) {
+                      const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
+                      const courseName = enrolledEnrollment.section.course?.name || 'Ders';
+                      throw new Error(`Bu dersi alamazsın. ${courseCode} - ${courseName} dersi ile aynı gün ve saatte çakışıyor.`);
+                    }
+                  }
+                }
               }
             }
-            
-            if (!existingSchedule || !existingSchedule.days || !Array.isArray(existingSchedule.days) || !existingSchedule.startTime) {
-              continue;
-            }
+          }
+          // Old format: days array + startTime/endTime
+          else if (scheduleJson.days && Array.isArray(scheduleJson.days) && scheduleJson.startTime) {
+            for (const enrolledEnrollment of enrolledSections) {
+              let existingSchedule = enrolledEnrollment.section.scheduleJson;
+              if (typeof existingSchedule === 'string') {
+                try {
+                  existingSchedule = JSON.parse(existingSchedule);
+                } catch (e) {
+                  continue;
+                }
+              }
+              
+              if (!existingSchedule) continue;
+              
+              // Check new format
+              if (Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
+                for (const existingItem of existingSchedule.scheduleItems) {
+                  if (scheduleJson.days.includes(existingItem.day)) {
+                    const newStart = timeToMinutes(scheduleJson.startTime);
+                    const newEnd = timeToMinutes(scheduleJson.endTime);
+                    const existingStart = timeToMinutes(existingItem.startTime);
+                    const existingEnd = timeToMinutes(existingItem.endTime);
+                    
+                    if ((newStart < existingEnd && newEnd > existingStart)) {
+                      const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
+                      const courseName = enrolledEnrollment.section.course?.name || 'Ders';
+                      throw new Error(`Bu dersi alamazsın. ${courseCode} - ${courseName} dersi ile aynı gün ve saatte çakışıyor.`);
+                    }
+                  }
+                }
+              }
+              // Check old format
+              else if (existingSchedule.days && Array.isArray(existingSchedule.days) && existingSchedule.startTime) {
+                const dayOverlap = scheduleJson.days.some(day => existingSchedule.days.includes(day));
+                if (dayOverlap) {
+                  const newStart = timeToMinutes(scheduleJson.startTime);
+                  const newEnd = timeToMinutes(scheduleJson.endTime);
+                  const existingStart = timeToMinutes(existingSchedule.startTime);
+                  const existingEnd = timeToMinutes(existingSchedule.endTime);
 
-            const dayOverlap = scheduleJson.days.some(day => existingSchedule.days.includes(day));
-            if (!dayOverlap) {
-              continue;
-            }
-
-            const newStart = timeToMinutes(scheduleJson.startTime);
-            const newEnd = timeToMinutes(scheduleJson.endTime);
-            const existingStart = timeToMinutes(existingSchedule.startTime);
-            const existingEnd = timeToMinutes(existingSchedule.endTime);
-
-            if ((newStart < existingEnd && newEnd > existingStart)) {
-              throw new Error('Schedule conflict detected. You have another class at the same time.');
+                  if ((newStart < existingEnd && newEnd > existingStart)) {
+                    const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
+                    const courseName = enrolledEnrollment.section.course?.name || 'Ders';
+                    throw new Error(`Bu dersi alamazsın. ${courseCode} - ${courseName} dersi ile aynı gün ve saatte çakışıyor.`);
+                  }
+                }
+              }
             }
           }
         }
@@ -284,7 +363,14 @@ const enroll = async (studentId, sectionId) => {
             semester: section.semester,
             year: section.year
           },
-          attributes: ['id', 'scheduleJson']
+          include: [
+            {
+              model: Course,
+              as: 'course',
+              attributes: ['id', 'code', 'name']
+            }
+          ],
+          attributes: ['id', 'scheduleJson', 'sectionNumber']
         }
       ]
     });
@@ -300,33 +386,105 @@ const enroll = async (studentId, sectionId) => {
       }
     }
 
-    if (scheduleJson && scheduleJson.days && Array.isArray(scheduleJson.days) && scheduleJson.startTime) {
-      for (const enrolledEnrollment of enrolledSections) {
-        let existingSchedule = enrolledEnrollment.section.scheduleJson;
-        if (typeof existingSchedule === 'string') {
-          try {
-            existingSchedule = JSON.parse(existingSchedule);
-          } catch (e) {
-            continue;
+    // Check for schedule conflicts
+    if (scheduleJson) {
+      // New format: scheduleItems array
+      if (Array.isArray(scheduleJson.scheduleItems) && scheduleJson.scheduleItems.length > 0) {
+        for (const newItem of scheduleJson.scheduleItems) {
+          for (const enrolledEnrollment of enrolledSections) {
+            let existingSchedule = enrolledEnrollment.section.scheduleJson;
+            if (typeof existingSchedule === 'string') {
+              try {
+                existingSchedule = JSON.parse(existingSchedule);
+              } catch (e) {
+                continue;
+              }
+            }
+            
+            if (!existingSchedule) continue;
+            
+            // Check new format
+            if (Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
+              for (const existingItem of existingSchedule.scheduleItems) {
+                if (newItem.day === existingItem.day) {
+                  const newStart = timeToMinutes(newItem.startTime);
+                  const newEnd = timeToMinutes(newItem.endTime);
+                  const existingStart = timeToMinutes(existingItem.startTime);
+                  const existingEnd = timeToMinutes(existingItem.endTime);
+                  
+                  if ((newStart < existingEnd && newEnd > existingStart)) {
+                    const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
+                    const courseName = enrolledEnrollment.section.course?.name || 'Ders';
+                    throw new Error(`Bu dersi alamazsın. ${courseCode} - ${courseName} dersi ile aynı gün ve saatte çakışıyor.`);
+                  }
+                }
+              }
+            }
+            // Check old format
+            else if (existingSchedule.days && Array.isArray(existingSchedule.days) && existingSchedule.startTime) {
+              if (existingSchedule.days.includes(newItem.day)) {
+                const newStart = timeToMinutes(newItem.startTime);
+                const newEnd = timeToMinutes(newItem.endTime);
+                const existingStart = timeToMinutes(existingSchedule.startTime);
+                const existingEnd = timeToMinutes(existingSchedule.endTime);
+                
+                if ((newStart < existingEnd && newEnd > existingStart)) {
+                  const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
+                  const courseName = enrolledEnrollment.section.course?.name || 'Ders';
+                  throw new Error(`Bu dersi alamazsın. ${courseCode} - ${courseName} dersi ile aynı gün ve saatte çakışıyor.`);
+                }
+              }
+            }
           }
         }
-        
-        if (!existingSchedule || !existingSchedule.days || !Array.isArray(existingSchedule.days) || !existingSchedule.startTime) {
-          continue;
-        }
+      }
+      // Old format: days array + startTime/endTime
+      else if (scheduleJson.days && Array.isArray(scheduleJson.days) && scheduleJson.startTime) {
+        for (const enrolledEnrollment of enrolledSections) {
+          let existingSchedule = enrolledEnrollment.section.scheduleJson;
+          if (typeof existingSchedule === 'string') {
+            try {
+              existingSchedule = JSON.parse(existingSchedule);
+            } catch (e) {
+              continue;
+            }
+          }
+          
+          if (!existingSchedule) continue;
+          
+          // Check new format
+          if (Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
+            for (const existingItem of existingSchedule.scheduleItems) {
+              if (scheduleJson.days.includes(existingItem.day)) {
+                const newStart = timeToMinutes(scheduleJson.startTime);
+                const newEnd = timeToMinutes(scheduleJson.endTime);
+                const existingStart = timeToMinutes(existingItem.startTime);
+                const existingEnd = timeToMinutes(existingItem.endTime);
+                
+                if ((newStart < existingEnd && newEnd > existingStart)) {
+                  const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
+                  const courseName = enrolledEnrollment.section.course?.name || 'Ders';
+                  throw new Error(`Bu dersi alamazsın. ${courseCode} - ${courseName} dersi ile aynı gün ve saatte çakışıyor.`);
+                }
+              }
+            }
+          }
+          // Check old format
+          else if (existingSchedule.days && Array.isArray(existingSchedule.days) && existingSchedule.startTime) {
+            const dayOverlap = scheduleJson.days.some(day => existingSchedule.days.includes(day));
+            if (dayOverlap) {
+              const newStart = timeToMinutes(scheduleJson.startTime);
+              const newEnd = timeToMinutes(scheduleJson.endTime);
+              const existingStart = timeToMinutes(existingSchedule.startTime);
+              const existingEnd = timeToMinutes(existingSchedule.endTime);
 
-        const dayOverlap = scheduleJson.days.some(day => existingSchedule.days.includes(day));
-        if (!dayOverlap) {
-          continue;
-        }
-
-        const newStart = timeToMinutes(scheduleJson.startTime);
-        const newEnd = timeToMinutes(scheduleJson.endTime);
-        const existingStart = timeToMinutes(existingSchedule.startTime);
-        const existingEnd = timeToMinutes(existingSchedule.endTime);
-
-        if ((newStart < existingEnd && newEnd > existingStart)) {
-          throw new Error('Schedule conflict detected. You have another class at the same time.');
+              if ((newStart < existingEnd && newEnd > existingStart)) {
+                const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
+                const courseName = enrolledEnrollment.section.course?.name || 'Ders';
+                throw new Error(`Bu dersi alamazsın. ${courseCode} - ${courseName} dersi ile aynı gün ve saatte çakışıyor.`);
+              }
+            }
+          }
         }
       }
     }
