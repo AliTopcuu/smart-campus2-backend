@@ -381,13 +381,21 @@ async function generateSchedule(sectionIds, semester, year) {
       year
     },
     include: [
-      { model: Course, as: 'course' },
+      { 
+        model: Course, 
+        as: 'course',
+        required: true, // Only include sections with valid (non-deleted) courses
+        paranoid: true // Exclude soft-deleted courses
+      },
       { model: db.User, as: 'instructor', attributes: ['id', 'fullName'], required: false }
     ]
   });
 
-  if (sections.length === 0) {
-    throw new ValidationError('No sections found for the given criteria');
+  // Filter out sections with null courses (additional safety check)
+  const validSections = sections.filter(s => s.course != null);
+
+  if (validSections.length === 0) {
+    throw new ValidationError('No valid sections found for the given criteria. Some courses may have been deleted.');
   }
 
   // Fetch all available classrooms
@@ -409,7 +417,12 @@ async function generateSchedule(sectionIds, semester, year) {
       {
         model: CourseSection,
         as: 'section',
-        include: [{ model: Course, as: 'course' }]
+        include: [{ 
+          model: Course, 
+          as: 'course',
+          required: true, // Only include enrollments with valid courses
+          paranoid: true // Exclude soft-deleted courses
+        }]
       }
     ]
   });
@@ -424,7 +437,12 @@ async function generateSchedule(sectionIds, semester, year) {
       classroomId: { [Op.ne]: null }
     },
     include: [
-      { model: Course, as: 'course' },
+      { 
+        model: Course, 
+        as: 'course',
+        required: true, // Only include sections with valid courses
+        paranoid: true // Exclude soft-deleted courses
+      },
       { model: db.User, as: 'instructor', attributes: ['id', 'fullName'], required: false }
     ]
   });
@@ -464,7 +482,7 @@ async function generateSchedule(sectionIds, semester, year) {
   }
 
   // Run backtracking algorithm
-  const result = await backtrackSchedule(sections, classrooms, allEnrollments, existingAssignments);
+  const result = await backtrackSchedule(validSections, classrooms, allEnrollments, existingAssignments);
 
   if (!result.success) {
     throw new ValidationError('Could not generate a valid schedule. Try adjusting constraints or reducing number of sections.');
@@ -484,7 +502,7 @@ async function generateSchedule(sectionIds, semester, year) {
     year,
     generatedAt: new Date(),
     scheduleItems,
-    sections: sections.map(s => ({
+    sections: validSections.map(s => ({
       id: s.id,
       courseCode: s.course?.code,
       sectionNumber: s.sectionNumber,
@@ -551,14 +569,19 @@ async function getMySchedule(userId, userRole, semester, year) {
             year
           },
           include: [
-            { model: Course, as: 'course' },
+            { 
+              model: Course, 
+              as: 'course',
+              required: true, // Only include sections with valid courses
+              paranoid: true // Exclude soft-deleted courses
+            },
             { model: Classroom, as: 'classroom' },
             { model: db.User, as: 'instructor', attributes: ['id', 'fullName'], required: false }
           ]
         }
       ]
     });
-    sections = enrollments.map(e => e.section).filter(s => s != null);
+    sections = enrollments.map(e => e.section).filter(s => s != null && s.course != null);
   } else if (userRole === 'faculty' || userRole === 'admin') {
     // Get sections where user is instructor
     sections = await CourseSection.findAll({
@@ -568,10 +591,17 @@ async function getMySchedule(userId, userRole, semester, year) {
         year
       },
       include: [
-        { model: Course, as: 'course' },
+        { 
+          model: Course, 
+          as: 'course',
+          required: true, // Only include sections with valid courses
+          paranoid: true // Exclude soft-deleted courses
+        },
         { model: Classroom, as: 'classroom' }
       ]
     });
+    // Additional filter for safety
+    sections = sections.filter(s => s.course != null);
   }
 
   // Format as weekly schedule

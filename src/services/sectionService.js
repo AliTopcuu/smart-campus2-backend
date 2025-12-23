@@ -17,7 +17,9 @@ const list = async (queryParams = {}) => {
       {
         model: Course,
         as: 'course',
-        attributes: ['id', 'code', 'name', 'credits', 'ects']
+        attributes: ['id', 'code', 'name', 'credits', 'ects'],
+        required: true, // Only include sections with valid (non-deleted) courses
+        paranoid: true // Exclude soft-deleted courses
       },
       {
         model: User,
@@ -33,7 +35,8 @@ const list = async (queryParams = {}) => {
     order: [['year', 'DESC'], ['semester', 'ASC'], ['sectionNumber', 'ASC']]
   });
 
-  return sections;
+  // Additional filter for safety (filter out sections with null courses)
+  return sections.filter(s => s.course != null);
 };
 
 const getById = async (sectionId) => {
@@ -42,7 +45,9 @@ const getById = async (sectionId) => {
       {
         model: Course,
         as: 'course',
-        attributes: ['id', 'code', 'name', 'credits', 'ects']
+        attributes: ['id', 'code', 'name', 'credits', 'ects'],
+        required: true, // Only include sections with valid (non-deleted) courses
+        paranoid: true // Exclude soft-deleted courses
       },
       {
         model: User,
@@ -57,8 +62,8 @@ const getById = async (sectionId) => {
     ]
   });
 
-  if (!section) {
-    throw new Error('Section not found');
+  if (!section || !section.course) {
+    throw new Error('Section not found or course has been deleted');
   }
 
   return section;
@@ -72,14 +77,19 @@ const mySections = async (instructorId) => {
       {
         model: Course,
         as: 'course',
-        attributes: ['id', 'code', 'name']
+        attributes: ['id', 'code', 'name'],
+        required: true, // Only include sections with valid (non-deleted) courses
+        paranoid: true // Exclude soft-deleted courses
       }
     ],
     order: [['year', 'DESC'], ['semester', 'ASC']]
   });
 
+  // Filter out sections with null courses (additional safety check)
+  const validSections = sections.filter(s => s.course != null);
+
   // Ensure scheduleJson is properly parsed
-  return sections.map(section => {
+  return validSections.map(section => {
     // Use toJSON() to get plain object, then get scheduleJson
     const sectionData = section.toJSON ? section.toJSON() : section;
     let scheduleJson = sectionData.scheduleJson;
