@@ -29,7 +29,12 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     gpa: DataTypes.DECIMAL,
-    cgpa: DataTypes.DECIMAL
+    cgpa: DataTypes.DECIMAL,
+    hasScholarship: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: 'Burslu öğrenci mi?'
+    }
   }, {
     sequelize,
     modelName: 'Student',

@@ -12,6 +12,10 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       User.hasOne(models.Student, { foreignKey: 'userId' });
       User.hasOne(models.Faculty, { foreignKey: 'userId' });
+      User.hasOne(models.Wallet, { foreignKey: 'userId', as: 'wallet' });
+      User.hasMany(models.MealReservation, { foreignKey: 'userId', as: 'mealReservations' });
+      User.hasMany(models.ClassroomReservation, { foreignKey: 'userId', as: 'classroomReservations' });
+      User.hasMany(models.ClassroomReservation, { foreignKey: 'approvedBy', as: 'approvedReservations' });
     }
   }
   User.init({

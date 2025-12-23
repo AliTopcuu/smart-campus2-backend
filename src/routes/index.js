@@ -22,6 +22,11 @@ router.use('/sections', sectionRoutes);
 router.use('/enrollments', enrollmentRoutes);
 router.use('/grades', gradeRoutes);
 router.use('/departments', departmentRoutes);
+router.use('/meals', require('./mealRoutes'));
+router.use('/wallet', require('./walletRoutes'));
+router.use('/events', require('./eventRoutes'));
+router.use('/reservations', require('./classroomReservationRoutes'));
+router.use('/scheduling', require('./schedulingRoutes'));
 
 module.exports = router;
 

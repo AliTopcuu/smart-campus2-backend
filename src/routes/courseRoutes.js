@@ -54,6 +54,10 @@ const updateCourseSchema = yup.object({
 });
 
 router.get('/', authenticate, courseController.list);
+router.get('/classrooms', authenticate, courseController.getClassrooms);
+router.post('/classrooms', authenticate, authorizeRole(['admin']), courseController.createClassroom);
+router.put('/classrooms/:id', authenticate, authorizeRole(['admin']), courseController.updateClassroom);
+router.delete('/classrooms/:id', authenticate, authorizeRole(['admin']), courseController.deleteClassroom);
 router.get('/:id', authenticate, courseController.getById);
 router.post('/', 
   authenticate, // 1. Önce kimlik doğrulanır (req.user burada oluşmalı)

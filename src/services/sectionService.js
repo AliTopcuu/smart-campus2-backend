@@ -2,13 +2,14 @@ const db = require('../models');
 const { CourseSection, Course, User, Classroom } = db;
 
 const list = async (queryParams = {}) => {
-  const { semester, year, instructorId, courseId } = queryParams;
+  const { semester, year, instructorId, courseId, classroomId } = queryParams;
 
   const where = {};
   if (semester) where.semester = semester;
   if (year) where.year = parseInt(year);
   if (instructorId) where.instructorId = parseInt(instructorId);
   if (courseId) where.courseId = parseInt(courseId);
+  if (classroomId) where.classroomId = parseInt(classroomId);
 
   const sections = await CourseSection.findAll({
     where,
@@ -124,9 +125,17 @@ const create = async (sectionData) => {
     classroomId: classroomId ? parseInt(classroomId) : null
   });
 
+  // Reload with associations
+  const createdSection = await CourseSection.findByPk(section.id, {
+    include: [
+      { model: Course, as: 'course', attributes: ['id', 'code', 'name'] },
+      { model: Classroom, as: 'classroom' }
+    ]
+  });
+
   return {
     message: 'Section created successfully',
-    section
+    section: createdSection
   };
 };
 
@@ -149,9 +158,17 @@ const update = async (sectionId, sectionData) => {
     classroomId: classroomId !== undefined ? (classroomId ? parseInt(classroomId) : null) : section.classroomId
   });
 
+  // Reload with associations
+  const updatedSection = await CourseSection.findByPk(sectionId, {
+    include: [
+      { model: Course, as: 'course', attributes: ['id', 'code', 'name'] },
+      { model: Classroom, as: 'classroom' }
+    ]
+  });
+
   return {
     message: 'Section updated successfully',
-    section
+    section: updatedSection
   };
 };
 

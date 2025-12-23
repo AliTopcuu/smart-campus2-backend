@@ -29,6 +29,16 @@ db.Enrollment = require('./enrollment')(sequelize, DataTypes);
 db.AttendanceSession = require('./attendancesession')(sequelize, DataTypes);
 db.AttendanceRecord = require('./attendancerecord')(sequelize, DataTypes);
 db.ExcuseRequest = require('./excuserequest')(sequelize, DataTypes);
+db.Cafeteria = require('./cafeteria')(sequelize, DataTypes);
+db.MealMenu = require('./mealmenu')(sequelize, DataTypes);
+db.Wallet = require('./wallet')(sequelize, DataTypes);
+db.Transaction = require('./transaction')(sequelize, DataTypes);
+db.MealReservation = require('./mealreservation')(sequelize, DataTypes);
+db.Event = require('./event')(sequelize, DataTypes);
+db.EventRegistration = require('./eventregistration')(sequelize, DataTypes);
+db.Waitlist = require('./waitlist')(sequelize, DataTypes);
+db.EventSurvey = require('./eventsurvey')(sequelize, DataTypes);
+db.ClassroomReservation = require('./classroomreservation')(sequelize, DataTypes);
 
 Object.values(db).forEach((model) => {
   if (model.associate) {

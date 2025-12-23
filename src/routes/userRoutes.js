@@ -151,4 +151,141 @@ router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
   }
 });
 
+/* -------------------------------------------------------
+   👑 ADMİN ROTALARI (Burslu Öğrenci Yönetimi)
+------------------------------------------------------- */
+// Öğrenci listesi (burslu durumu ile)
+router.get('/students', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const { page = 1, limit = 50, search, hasScholarship } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+    
+    const studentWhere = {};
+    if (hasScholarship !== undefined && hasScholarship !== null && hasScholarship !== '') {
+      // Handle both string and boolean values
+      const scholarshipValue = hasScholarship === 'true' || hasScholarship === true;
+      studentWhere.hasScholarship = scholarshipValue;
+    }
+
+    const userWhere = { role: 'student' };
+    if (search) {
+      userWhere[Op.or] = [
+        { fullName: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } }
+      ];
+    }
+
+    const studentInclude = {
+      model: Student,
+      required: false, // LEFT JOIN - Student kaydı olmasa bile User'ları getir
+      include: [{ 
+        model: Department,
+        required: false
+      }]
+    };
+    
+    if (Object.keys(studentWhere).length > 0) {
+      studentInclude.where = studentWhere;
+      // Filtre varsa required true yap (INNER JOIN)
+      studentInclude.required = true;
+    }
+
+    const { count, rows } = await User.findAndCountAll({
+      where: userWhere,
+      include: [studentInclude],
+      limit: Number(limit),
+      offset,
+      order: [['createdAt', 'DESC']],
+      distinct: true, // COUNT için distinct kullan (include olduğunda gerekli)
+    });
+
+    console.log('Students query result:', { count, rowsCount: rows.length, userWhere, studentWhere });
+
+    res.json({
+      data: rows.map(user => ({
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        studentNumber: user.Student?.studentNumber,
+        department: user.Student?.Department?.name,
+        hasScholarship: user.Student?.hasScholarship || false,
+        gpa: user.Student?.gpa ? parseFloat(user.Student.gpa) : null,
+        cgpa: user.Student?.cgpa ? parseFloat(user.Student.cgpa) : null
+      })),
+      meta: {
+        page: Number(page),
+        limit: Number(limit),
+        total: count,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    next(error);
+  }
+});
+
+// Burslu durumu güncelle
+router.patch('/students/:userId/scholarship', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { hasScholarship } = req.body;
+
+    if (typeof hasScholarship !== 'boolean') {
+      throw new ValidationError('hasScholarship must be a boolean value');
+    }
+
+    // User'ı kontrol et
+    const user = await User.findByPk(userId);
+    if (!user) {
+      throw new ValidationError('User not found');
+    }
+
+    if (user.role !== 'student') {
+      throw new ValidationError('User is not a student');
+    }
+
+    // Student kaydını bul veya oluştur
+    let student = await Student.findOne({ where: { userId } });
+    
+    if (!student) {
+      // Student kaydı yoksa, oluştur
+      // Default department bul veya oluştur
+      let defaultDept = await Department.findOne({ order: [['id', 'ASC']] });
+      if (!defaultDept) {
+        // Eğer hiç department yoksa, bir tane oluştur
+        defaultDept = await Department.create({
+          code: 'GEN',
+          name: 'Genel',
+          faculty: 'Genel Fakülte'
+        });
+      }
+
+      // Student kaydı oluştur
+      student = await Student.create({
+        userId: user.id,
+        studentNumber: `S${Date.now()}${Math.floor(Math.random() * 1000)}`, // Unique student number
+        departmentId: defaultDept.id,
+        hasScholarship: false,
+      });
+    }
+
+    student.hasScholarship = hasScholarship;
+    await student.save();
+
+    res.json({
+      message: `Burslu durumu ${hasScholarship ? 'aktif' : 'pasif'} edildi`,
+      student: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        studentNumber: student.studentNumber,
+        hasScholarship: student.hasScholarship
+      }
+    });
+  } catch (error) {
+    console.error('Error updating scholarship:', error);
+    next(error);
+  }
+});
+
 module.exports = router;

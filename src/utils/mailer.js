@@ -52,7 +52,23 @@ const sendResetPasswordEmail = async (email, token) => {
   });
 };
 
+const sendPaymentConfirmationEmail = async (email, amount, balanceAfter) => {
+  if (!transporter) {
+    console.log('\n========================================');
+    console.log('💰 PAYMENT CONFIRMATION (NOT SENT - MAIL NOT CONFIGURED)');
+    console.log('========================================');
+    console.log(`To: ${email}`);
+    console.log(`Amount Loaded: ${amount} TRY`);
+    console.log(`New Balance: ${balanceAfter} TRY`);
+    console.log('========================================\n');
+    return;
+  }
+
+  // Implementation for real mailer would go here
+};
+
 module.exports = {
   sendVerificationEmail,
   sendResetPasswordEmail,
+  sendPaymentConfirmationEmail
 };
