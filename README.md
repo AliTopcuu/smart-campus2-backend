@@ -1,6 +1,10 @@
-# Backend - SmartCampus Part 1
+# Backend - SmartCampus
 
 Node.js, Express, Sequelize ve PostgreSQL tabanlı RESTful API backend servisi.
+
+## 🌐 Canlı Uygulama
+
+**Frontend:** [https://smart-campus2-frontend-production.up.railway.app/login](https://smart-campus2-frontend-production.up.railway.app/login)
 
 ## 🔧 Teknolojiler
 
@@ -83,6 +87,42 @@ Node.js, Express, Sequelize ve PostgreSQL tabanlı RESTful API backend servisi.
    npx sequelize-cli db:seed:all
    ```
 
+## 📊 Seed Data (Demo Kullanıcılar)
+
+Seed işlemi sonrası aşağıdaki demo kullanıcılar oluşturulur:
+
+### Admin Kullanıcı
+- **Email:** `admin@smartcampus.edu`
+- **Password:** `Password123`
+- **Role:** Admin
+
+### Öğrenci Kullanıcılar (5 adet)
+- **Email:** `student1@smartcampus.edu` - `student5@smartcampus.edu`
+- **Password:** `Password123`
+- **Role:** Student
+- **Student Numbers:** 2020001 - 2020005
+- **GPA:** 3.0 (tüm öğrenciler)
+- **CGPA:** 3.1 (tüm öğrenciler)
+- **Departments:** Bilgisayar Mühendisliği, Elektrik-Elektronik Mühendisliği, Endüstri Mühendisliği, İşletme, İktisat (döngüsel olarak atanır)
+
+### Akademisyen Kullanıcılar (2 adet)
+- **Email:** `faculty1@smartcampus.edu`, `faculty2@smartcampus.edu`
+- **Password:** `Password123`
+- **Role:** Faculty
+- **Employee Numbers:** EMP-1, EMP-2
+- **Titles:** Professor (faculty1), Assistant Professor (faculty2)
+- **Departments:** Bilgisayar Mühendisliği, Elektrik-Elektronik Mühendisliği (sırayla atanır)
+
+### Bölümler (Departments)
+Seed işlemi aşağıdaki bölümleri oluşturur:
+- Bilgisayar Mühendisliği (Mühendislik Fakültesi)
+- Elektrik-Elektronik Mühendisliği (Mühendislik Fakültesi)
+- Endüstri Mühendisliği (Mühendislik Fakültesi)
+- İşletme (İşletme Fakültesi)
+- İktisat (İktisadi ve İdari Bilimler Fakültesi)
+
+**Not:** Tüm demo kullanıcılar için şifre: `Password123`
+
 6. Sunucuyu başlatın:
    ```bash
    npm start
@@ -92,7 +132,9 @@ Node.js, Express, Sequelize ve PostgreSQL tabanlı RESTful API backend servisi.
 
 ## 📡 API Endpoints
 
-Detaylı API dokümantasyonu için [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) dosyasına bakın.
+Detaylı API dokümantasyonu için:
+- **Part 1-2:** [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+- **Part 3:** [docs/API_DOCUMENTATION_PART3.md](./docs/API_DOCUMENTATION_PART3.md)
 
 ### Authentication
 - `POST /api/v1/auth/register` - Kullanıcı kaydı
@@ -149,7 +191,9 @@ backend/
 
 ## 📝 Veritabanı
 
-Detaylı veritabanı şeması için [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) dosyasına bakın.
+Detaylı veritabanı şeması için:
+- **Part 1-2:** [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)
+- **Part 3 Updates:** [docs/DATABASE_SCHEMA_UPDATE.md](./docs/DATABASE_SCHEMA_UPDATE.md)
 
 ### Migration Komutları
 
