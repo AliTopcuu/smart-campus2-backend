@@ -6,6 +6,8 @@
   "scripts": {
    "dev": "node src/server.js",
     "start": "sequelize-cli db:migrate && node src/server.js",
+    "migrate": "sequelize-cli db:migrate",
+    "migrate:undo": "sequelize-cli db:migrate:undo",
     "test": "jest --coverage",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
