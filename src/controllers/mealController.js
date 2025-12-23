@@ -365,9 +365,18 @@ exports.scanReservation = async (req, res, next) => {
         }
 
         // Check if QR code can be used within meal time window
+        // Türkiye saati (Europe/Istanbul, UTC+3) kullanılıyor
         const now = new Date();
-        const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
+        // Türkiye saatini al (Europe/Istanbul timezone)
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Europe/Istanbul',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: false
+        });
+        const parts = formatter.formatToParts(now);
+        const currentHour = parseInt(parts.find(p => p.type === 'hour').value);
+        const currentMinute = parseInt(parts.find(p => p.type === 'minute').value);
         const currentTimeInMinutes = currentHour * 60 + currentMinute;
         const mealType = reservation.mealType; // 'LUNCH' or 'DINNER'
 
