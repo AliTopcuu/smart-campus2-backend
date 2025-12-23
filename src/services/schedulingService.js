@@ -230,6 +230,11 @@ async function backtrackSchedule(sections, classrooms, enrollments, existingAssi
 
   const section = sections[depth];
   
+  // Log progress for debugging (only for first few sections to avoid spam)
+  if (process.env.NODE_ENV === 'development' && depth < 3) {
+    console.log(`Backtracking: Processing section ${depth + 1}/${sections.length} (ID: ${section.id}, Course: ${section.course?.code || 'N/A'})`);
+  }
+  
   // Check if this section already has a schedule (from previous manual assignment)
   const existingSchedule = section.scheduleJson;
   if (existingSchedule && typeof existingSchedule === 'object' && Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
@@ -260,30 +265,33 @@ async function backtrackSchedule(sections, classrooms, enrollments, existingAssi
 
       const classroom = classrooms.find(c => c.id === assignment.classroomId);
       if (!classroom) {
-        // Classroom not found, skip this section or try to find alternative
-        return { success: false, assignments: null };
-      }
-
-      const constraintCheck = checkHardConstraints(
-        assignment,
-        allAssignments,
-        section,
-        classroom,
-        assignment.day,
-        assignment.startTime,
-        assignment.endTime,
-        sectionEnrollments
-      );
-
-      if (constraintCheck.valid) {
-        assignments.push(assignment);
-        const result = await backtrackSchedule(sections, classrooms, enrollments, existingAssignments, assignments, depth + 1);
-        if (result.success) {
-          return result;
+        // Classroom not found, skip this existing schedule and try to find alternative
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`Classroom ${assignment.classroomId} not found for section ${section.id}, skipping existing schedule...`);
         }
-        assignments.pop();
+        // Continue to try other options below
+      } else {
+        const constraintCheck = checkHardConstraints(
+          assignment,
+          allAssignments,
+          section,
+          classroom,
+          assignment.day,
+          assignment.startTime,
+          assignment.endTime,
+          sectionEnrollments
+        );
+
+        if (constraintCheck.valid) {
+          assignments.push(assignment);
+          const result = await backtrackSchedule(sections, classrooms, enrollments, existingAssignments, assignments, depth + 1);
+          if (result.success) {
+            return result;
+          }
+          assignments.pop();
+        }
+        // If existing schedule conflicts, we can't use it - continue to try alternatives
       }
-      // If existing schedule conflicts, we can't use it - continue to try alternatives
     }
   }
   
@@ -374,6 +382,7 @@ async function backtrackSchedule(sections, classrooms, enrollments, existingAssi
 // Generate schedule using CSP algorithm
 async function generateSchedule(sectionIds, semester, year) {
   // Fetch sections with full details
+  // Use required: false to get all sections, then filter out deleted courses
   const sections = await CourseSection.findAll({
     where: {
       id: { [Op.in]: sectionIds },
@@ -384,18 +393,31 @@ async function generateSchedule(sectionIds, semester, year) {
       { 
         model: Course, 
         as: 'course',
-        required: true, // Only include sections with valid (non-deleted) courses
+        required: false, // Get all sections first, then filter
         paranoid: true // Exclude soft-deleted courses
       },
       { model: db.User, as: 'instructor', attributes: ['id', 'fullName'], required: false }
     ]
   });
 
-  // Filter out sections with null courses (additional safety check)
+  // Filter out sections with null or deleted courses
   const validSections = sections.filter(s => s.course != null);
 
   if (validSections.length === 0) {
     throw new ValidationError('No valid sections found for the given criteria. Some courses may have been deleted.');
+  }
+
+  // Log warning if some sections were filtered out
+  if (validSections.length < sections.length) {
+    const filteredCount = sections.length - validSections.length;
+    console.warn(`Warning: ${filteredCount} section(s) filtered out due to deleted courses. Processing ${validSections.length} valid section(s).`);
+  }
+
+  // Log section details for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`Generating schedule for ${validSections.length} sections:`, 
+      validSections.map(s => ({ id: s.id, courseCode: s.course?.code, sectionNumber: s.sectionNumber }))
+    );
   }
 
   // Fetch all available classrooms
@@ -440,15 +462,18 @@ async function generateSchedule(sectionIds, semester, year) {
       { 
         model: Course, 
         as: 'course',
-        required: true, // Only include sections with valid courses
+        required: false, // Get all sections first, then filter
         paranoid: true // Exclude soft-deleted courses
       },
       { model: db.User, as: 'instructor', attributes: ['id', 'fullName'], required: false }
     ]
   });
 
+  // Filter out sections with deleted courses
+  const validExistingSections = allExistingSections.filter(s => s.course != null);
+
   const existingAssignments = [];
-  for (const section of allExistingSections) {
+  for (const section of validExistingSections) {
     // Skip sections that are in the selected list (they will be handled in backtrackSchedule)
     if (sectionIds.includes(section.id)) {
       continue;
@@ -481,11 +506,61 @@ async function generateSchedule(sectionIds, semester, year) {
     }
   }
 
+  // Log existing assignments for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`Existing assignments: ${existingAssignments.length}`);
+    console.log(`Available classrooms: ${classrooms.length}`);
+    console.log(`Total enrollments: ${allEnrollments.length}`);
+  }
+
+  // Check if we have enough resources
+  if (classrooms.length === 0) {
+    throw new ValidationError('No classrooms available. Please add classrooms first.');
+  }
+
+  if (validSections.length > 30) {
+    throw new ValidationError(`Too many sections (${validSections.length}). Please select maximum 30 sections at a time.`);
+  }
+
   // Run backtracking algorithm
+  const startTime = Date.now();
   const result = await backtrackSchedule(validSections, classrooms, allEnrollments, existingAssignments);
+  const duration = Date.now() - startTime;
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`Schedule generation took ${duration}ms`);
+  }
 
   if (!result.success) {
-    throw new ValidationError('Could not generate a valid schedule. Try adjusting constraints or reducing number of sections.');
+    // Provide more detailed error message
+    const errorDetails = [];
+    errorDetails.push(`Failed to generate schedule for ${validSections.length} section(s).`);
+    errorDetails.push(`Available classrooms: ${classrooms.length}`);
+    errorDetails.push(`Existing assignments: ${existingAssignments.length}`);
+    
+    // Check if there are too many sections
+    if (validSections.length > 20) {
+      errorDetails.push(`Consider reducing the number of sections (currently ${validSections.length}).`);
+    }
+    
+    // Check if there are enough classrooms
+    if (classrooms.length < validSections.length) {
+      errorDetails.push(`Not enough classrooms (${classrooms.length}) for ${validSections.length} sections.`);
+    }
+    
+    // Check for instructor conflicts
+    const instructorCounts = {};
+    validSections.forEach(s => {
+      if (s.instructorId) {
+        instructorCounts[s.instructorId] = (instructorCounts[s.instructorId] || 0) + 1;
+      }
+    });
+    const overloadedInstructors = Object.entries(instructorCounts).filter(([_, count]) => count > 5);
+    if (overloadedInstructors.length > 0) {
+      errorDetails.push(`Some instructors have too many sections (${overloadedInstructors.length} instructor(s) with >5 sections).`);
+    }
+    
+    throw new ValidationError(errorDetails.join(' '));
   }
 
   // Format assignments as schedule items
