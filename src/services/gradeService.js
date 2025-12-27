@@ -89,7 +89,8 @@ const myGrades = async (studentId, filters = {}) => {
           {
             model: Course,
             as: 'course',
-            attributes: ['id', 'code', 'name', 'credits', 'ects']
+            attributes: ['id', 'code', 'name', 'credits', 'ects'],
+            required: true // Only return enrollments where Course exists
           }
         ]
       }
@@ -221,7 +222,8 @@ const myGrades = async (studentId, filters = {}) => {
           {
             model: Course,
             as: 'course',
-            attributes: ['id', 'code', 'name', 'credits', 'ects']
+            attributes: ['id', 'code', 'name', 'credits', 'ects'],
+            required: true
           }
         ]
       }

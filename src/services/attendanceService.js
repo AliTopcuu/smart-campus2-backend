@@ -779,10 +779,12 @@ const attendanceService = {
         model: db.CourseSection,
         as: 'section',
         attributes: ['id', 'sectionNumber'],
+        required: true, // Only where Section exists
         include: [{
           model: db.Course,
           as: 'course',
-          attributes: ['id', 'code', 'name']
+          attributes: ['id', 'code', 'name'],
+          required: true // Only where Course exists
         }]
       }]
     });

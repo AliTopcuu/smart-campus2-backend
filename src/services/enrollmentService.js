@@ -614,14 +614,16 @@ const myCourses = async (studentId) => {
           {
             model: Course,
             as: 'course',
-            attributes: ['id', 'code', 'name', 'credits', 'ects']
+            attributes: ['id', 'code', 'name', 'credits', 'ects'],
+            required: true // Only return enrollments where Course exists
           },
           {
             model: User,
             as: 'instructor',
             attributes: ['id', 'fullName', 'email']
           }
-        ]
+        ],
+        required: true // Only return enrollments where Section exists
       }
     ],
     order: [['enrollmentDate', 'DESC']]
