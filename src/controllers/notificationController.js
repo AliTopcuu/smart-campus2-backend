@@ -57,10 +57,24 @@ const deleteNotification = async (req, res, next) => {
   }
 };
 
+/**
+ * Broadcast message to all connected users
+ */
+const broadcastMessage = async (req, res, next) => {
+  try {
+    const { type, title, message, ...payload } = req.body;
+    const result = await notificationService.broadcastToAll(type, title, message, payload);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getMyNotifications,
   markAsRead,
   markAllAsRead,
-  deleteNotification
+  deleteNotification,
+  broadcastMessage
 };
 

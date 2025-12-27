@@ -14,9 +14,14 @@ const start = async () => {
       await db.sequelize.sync();
       console.log('✅ Veritabanı bağlantısı BAŞARILI');
 
-      app.listen(PORT, '0.0.0.0', () => {
+      const server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Backend API çalışıyor: http://0.0.0.0:${PORT}`);
       });
+
+      // Initialize Socket.io
+      const { initSocket } = require('./socket');
+      initSocket(server);
+
       return; // Success, exit the function
     } catch (err) {
       if (i === maxRetries - 1) {

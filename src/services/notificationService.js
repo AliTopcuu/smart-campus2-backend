@@ -1,5 +1,6 @@
 const db = require('../models');
 const { Notification, User } = db;
+const { sendNotificationToUser, broadcastNotification } = require('../socket');
 
 /**
  * Create a notification for a single user
@@ -13,6 +14,19 @@ const createNotification = async (userId, type, title, message, metadata = null)
       message,
       metadata
     });
+
+    // Send real-time notification
+    try {
+      sendNotificationToUser(userId, type, {
+        id: notification.id,
+        title,
+        message,
+        metadata
+      });
+    } catch (socketError) {
+      console.warn('Failed to send real-time notification:', socketError.message);
+    }
+
     return notification;
   } catch (error) {
     console.error('Error creating notification:', error);
@@ -34,6 +48,21 @@ const createBulkNotifications = async (userIds, type, title, message, metadata =
     }));
 
     await Notification.bulkCreate(notifications);
+
+    // Send real-time notifications
+    // We do this after DB write to ensure consistency, but inside try-catch to not fail the request
+    try {
+      userIds.forEach(userId => {
+        sendNotificationToUser(userId, type, {
+          title,
+          message,
+          metadata
+        });
+      });
+    } catch (socketError) {
+      console.warn('Failed to send real-time bulk notifications:', socketError.message);
+    }
+
     return { count: notifications.length };
   } catch (error) {
     console.error('Error creating bulk notifications:', error);
@@ -60,8 +89,8 @@ const getUserNotifications = async (userId, options = {}) => {
   });
 
   const total = await Notification.count({ where });
-  const unreadCount = await Notification.count({ 
-    where: { ...where, isRead: false } 
+  const unreadCount = await Notification.count({
+    where: { ...where, isRead: false }
   });
 
   return {
@@ -141,6 +170,23 @@ const getAllStudents = async () => {
   return students.map(s => s.id);
 };
 
+/**
+ * Broadcast notification to all connected users
+ */
+const broadcastToAll = async (type, title, message, metadata = null) => {
+  try {
+    broadcastNotification(type, {
+      title,
+      message,
+      metadata
+    });
+    return { success: true, message: 'Broadcast sent to connected users' };
+  } catch (error) {
+    console.error('Error broadcasting notification:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   createNotification,
   createBulkNotifications,
@@ -148,6 +194,7 @@ module.exports = {
   markAsRead,
   markAllAsRead,
   deleteNotification,
-  getAllStudents
+  getAllStudents,
+  broadcastToAll
 };
 
