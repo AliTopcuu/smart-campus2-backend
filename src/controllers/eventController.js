@@ -23,7 +23,7 @@ const registerForEvent = async (req, res, next) => {
   // Retry logic for optimistic locking conflicts
   while (retryCount < MAX_RETRY_ATTEMPTS) {
     const t = await db.sequelize.transaction();
-    
+
     try {
       // 1. Check if user is already registered
       const existingRegistration = await EventRegistration.findOne({
@@ -72,7 +72,7 @@ const registerForEvent = async (req, res, next) => {
       // 3. Capacity Management with Optimistic Locking
       if (event.currentParticipants < event.capacity) {
         // There's space available - register the user
-        
+
         // Generate unique QR code
         const qrCodeData = `EVENT-${eventId}-${userId}-${crypto.randomUUID()}`;
 
@@ -84,7 +84,7 @@ const registerForEvent = async (req, res, next) => {
           eventId,
           status: 'registered',
           qrCode: qrCodeData // Use qrCode field name for database
-        }, { 
+        }, {
           transaction: t,
           fields: ['userId', 'eventId', 'status', 'qrCode'] // Explicitly specify fields
         });
@@ -110,7 +110,7 @@ const registerForEvent = async (req, res, next) => {
           await t.rollback();
           retryCount++;
           lastError = new ValidationError('Registration conflict. Please try again.');
-          
+
           // Wait a bit before retry (exponential backoff)
           await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
           continue; // Retry the transaction
@@ -151,7 +151,7 @@ const registerForEvent = async (req, res, next) => {
 
     } catch (error) {
       await t.rollback();
-      
+
       // If it's a validation/not found error, don't retry
       if (error instanceof ValidationError || error instanceof NotFoundError) {
         return next(error);
@@ -160,7 +160,7 @@ const registerForEvent = async (req, res, next) => {
       // For other errors, retry if we haven't exceeded max attempts
       retryCount++;
       lastError = error;
-      
+
       if (retryCount < MAX_RETRY_ATTEMPTS) {
         // Wait before retry (exponential backoff)
         await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
@@ -217,7 +217,32 @@ const list = async (req, res, next) => {
       order: [['date', 'ASC']]
     });
 
-    res.json(events);
+    // Calculate dynamic status based on endDate
+    const now = new Date();
+    const eventsWithDynamicStatus = events.map(event => {
+      const eventJson = event.toJSON();
+
+      // If event is cancelled, keep that status
+      if (eventJson.status === 'cancelled') {
+        eventJson.computedStatus = 'cancelled';
+      }
+      // If endDate exists and has passed, mark as completed
+      else if (eventJson.endDate && new Date(eventJson.endDate) < now) {
+        eventJson.computedStatus = 'completed';
+      }
+      // If start date hasn't arrived yet
+      else if (new Date(eventJson.date) > now) {
+        eventJson.computedStatus = 'upcoming';
+      }
+      // Event is ongoing
+      else {
+        eventJson.computedStatus = 'active';
+      }
+
+      return eventJson;
+    });
+
+    res.json(eventsWithDynamicStatus);
   } catch (error) {
     console.error('List events error:', error);
     next(error);
@@ -304,7 +329,7 @@ const myRegistrations = async (req, res, next) => {
  */
 const checkIn = async (req, res, next) => {
   const t = await db.sequelize.transaction();
-  
+
   try {
     const { qrCodeData } = req.body;
 
@@ -393,7 +418,7 @@ const checkIn = async (req, res, next) => {
  */
 const create = async (req, res, next) => {
   try {
-    const { title, description, date, location, capacity, surveySchema } = req.body;
+    const { title, description, category, date, endDate, location, capacity, surveySchema } = req.body;
     const createdBy = req.user.id;
 
     // Validate required fields
@@ -408,15 +433,16 @@ const create = async (req, res, next) => {
     const event = await Event.create({
       title,
       description,
+      category: category || null,
       date,
-      startDate: date, // Also set startDate for compatibility with existing table structure
+      startDate: date,
+      endDate: endDate || null,
       location,
       capacity,
       currentParticipants: 0,
       version: 0,
       status: 'active',
       surveySchema: surveySchema || null,
-      category: null, // Category is optional, can be null
       createdBy
     });
 
@@ -444,7 +470,7 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, description, date, location, capacity, status, surveySchema } = req.body;
+    const { title, description, category, date, endDate, location, capacity, status, surveySchema } = req.body;
 
     const event = await Event.findByPk(id);
 
@@ -471,7 +497,9 @@ const update = async (req, res, next) => {
     const updateData = {};
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
+    if (category !== undefined) updateData.category = category;
     if (date !== undefined) updateData.date = date;
+    if (endDate !== undefined) updateData.endDate = endDate;
     if (location !== undefined) updateData.location = location;
     if (capacity !== undefined) updateData.capacity = capacity;
     if (status !== undefined) updateData.status = status;
@@ -558,7 +586,7 @@ const getEventParticipants = async (req, res, next) => {
  */
 const removeParticipant = async (req, res, next) => {
   const t = await db.sequelize.transaction();
-  
+
   try {
     const { id, registrationId } = req.params;
 
@@ -618,7 +646,7 @@ const removeParticipant = async (req, res, next) => {
  */
 const remove = async (req, res, next) => {
   const t = await db.sequelize.transaction();
-  
+
   try {
     const { id } = req.params;
 

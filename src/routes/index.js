@@ -27,6 +27,7 @@ router.use('/wallet', require('./walletRoutes'));
 router.use('/events', require('./eventRoutes'));
 router.use('/reservations', require('./classroomReservationRoutes'));
 router.use('/scheduling', require('./schedulingRoutes'));
+router.use('/analytics', require('./analyticsRoutes'));
 
 module.exports = router;
 

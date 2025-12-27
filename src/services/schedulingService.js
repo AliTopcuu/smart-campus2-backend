@@ -26,7 +26,7 @@ const TIME_SLOTS = [];
 for (let hour = 9; hour < 17; hour++) {
   // Skip lunch break (12:00-13:00)
   if (hour === 12) continue;
-  
+
   for (let minute = 0; minute < 60; minute += 30) {
     TIME_SLOTS.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
   }
@@ -110,9 +110,9 @@ function checkHardConstraints(assignment, allAssignments, section, classroom, da
     for (const otherAssignment of allAssignments) {
       if (otherAssignment.sectionId === section.id) continue;
       if (!otherAssignment.instructorId || !otherAssignment.startTime || !otherAssignment.endTime) continue;
-      
+
       if (otherAssignment.instructorId === section.instructorId &&
-          otherAssignment.day?.toLowerCase() === normalizedDay) {
+        otherAssignment.day?.toLowerCase() === normalizedDay) {
         // Check for overlap or insufficient gap
         if (!hasMinimumGap(otherAssignment.startTime, otherAssignment.endTime, startTime, endTime)) {
           return { valid: false, reason: `Instructor double-booking: Instructor ${section.instructorId} already has a class at ${otherAssignment.startTime}-${otherAssignment.endTime} (needs 15 min gap)` };
@@ -125,9 +125,9 @@ function checkHardConstraints(assignment, allAssignments, section, classroom, da
   for (const otherAssignment of allAssignments) {
     if (otherAssignment.sectionId === section.id) continue;
     if (!otherAssignment.classroomId || !otherAssignment.startTime || !otherAssignment.endTime) continue;
-    
+
     if (otherAssignment.classroomId === classroom.id &&
-        otherAssignment.day?.toLowerCase() === normalizedDay) {
+      otherAssignment.day?.toLowerCase() === normalizedDay) {
       // Check for overlap or insufficient gap
       if (!hasMinimumGap(otherAssignment.startTime, otherAssignment.endTime, startTime, endTime)) {
         return { valid: false, reason: `Classroom double-booking: Classroom ${classroom.id} already booked at ${otherAssignment.startTime}-${otherAssignment.endTime} (needs 15 min gap)` };
@@ -154,13 +154,13 @@ function checkHardConstraints(assignment, allAssignments, section, classroom, da
       if (Array.isArray(enrolledSchedule.scheduleItems)) {
         for (const item of enrolledSchedule.scheduleItems) {
           if (item.day && item.day.toLowerCase() === day.toLowerCase() &&
-              timeOverlaps(item.startTime, item.endTime, startTime, endTime)) {
+            timeOverlaps(item.startTime, item.endTime, startTime, endTime)) {
             return { valid: false, reason: 'Student schedule conflict' };
           }
         }
       } else if (enrolledSchedule.days && Array.isArray(enrolledSchedule.days)) {
         if (enrolledSchedule.days.some(d => d.toLowerCase() === day.toLowerCase()) &&
-            timeOverlaps(enrolledSchedule.startTime, enrolledSchedule.endTime, startTime, endTime)) {
+          timeOverlaps(enrolledSchedule.startTime, enrolledSchedule.endTime, startTime, endTime)) {
           return { valid: false, reason: 'Student schedule conflict' };
         }
       }
@@ -229,12 +229,12 @@ async function backtrackSchedule(sections, classrooms, enrollments, existingAssi
   }
 
   const section = sections[depth];
-  
+
   // Log progress for debugging (only for first few sections to avoid spam)
   if (process.env.NODE_ENV === 'development' && depth < 3) {
     console.log(`Backtracking: Processing section ${depth + 1}/${sections.length} (ID: ${section.id}, Course: ${section.course?.code || 'N/A'})`);
   }
-  
+
   // Check if this section already has a schedule (from previous manual assignment)
   const existingSchedule = section.scheduleJson;
   if (existingSchedule && typeof existingSchedule === 'object' && Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
@@ -294,7 +294,7 @@ async function backtrackSchedule(sections, classrooms, enrollments, existingAssi
       }
     }
   }
-  
+
   // Get enrollments for this section
   const sectionEnrollments = await Enrollment.findAll({
     where: { sectionId: section.id, status: 'enrolled' },
@@ -308,7 +308,22 @@ async function backtrackSchedule(sections, classrooms, enrollments, existingAssi
   });
 
   // Try each classroom
-  for (const classroom of classrooms) {
+  let availableClassrooms = classrooms;
+
+  // If section has a specific classroom assigned, prioritize it
+  if (section.classroomId) {
+    const assignedClassroom = classrooms.find(c => c.id === section.classroomId);
+    if (assignedClassroom) {
+      // If found, ONLY try the assigned classroom (Hard Constraint based on user selection)
+      availableClassrooms = [assignedClassroom];
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Section ${section.id} has assigned classroom ${assignedClassroom.building}-${assignedClassroom.roomNumber}, restricting search.`);
+      }
+    }
+  }
+
+  for (const classroom of availableClassrooms) {
     // Try each day
     for (const day of DAYS_OF_WEEK) {
       // Try different time slots (course duration: 1.5 hours = 3 slots)
@@ -316,11 +331,11 @@ async function backtrackSchedule(sections, classrooms, enrollments, existingAssi
       for (let i = 0; i < TIME_SLOTS.length - 3; i++) {
         const startTime = TIME_SLOTS[i];
         const endTimeIndex = i + 3;
-        
+
         // Check if endTime would be in lunch break
         if (endTimeIndex < TIME_SLOTS.length) {
           const endTime = TIME_SLOTS[endTimeIndex];
-          
+
           // Validate time slot
           if (!startTime || !endTime) {
             continue;
@@ -390,8 +405,8 @@ async function generateSchedule(sectionIds, semester, year) {
       year
     },
     include: [
-      { 
-        model: Course, 
+      {
+        model: Course,
         as: 'course',
         required: false, // Get all sections first, then filter
         paranoid: true // Exclude soft-deleted courses
@@ -415,7 +430,7 @@ async function generateSchedule(sectionIds, semester, year) {
 
   // Log section details for debugging
   if (process.env.NODE_ENV === 'development') {
-    console.log(`Generating schedule for ${validSections.length} sections:`, 
+    console.log(`Generating schedule for ${validSections.length} sections:`,
       validSections.map(s => ({ id: s.id, courseCode: s.course?.code, sectionNumber: s.sectionNumber }))
     );
   }
@@ -439,8 +454,8 @@ async function generateSchedule(sectionIds, semester, year) {
       {
         model: CourseSection,
         as: 'section',
-        include: [{ 
-          model: Course, 
+        include: [{
+          model: Course,
           as: 'course',
           required: true, // Only include enrollments with valid courses
           paranoid: true // Exclude soft-deleted courses
@@ -459,8 +474,8 @@ async function generateSchedule(sectionIds, semester, year) {
       classroomId: { [Op.ne]: null }
     },
     include: [
-      { 
-        model: Course, 
+      {
+        model: Course,
         as: 'course',
         required: false, // Get all sections first, then filter
         paranoid: true // Exclude soft-deleted courses
@@ -537,17 +552,17 @@ async function generateSchedule(sectionIds, semester, year) {
     errorDetails.push(`Failed to generate schedule for ${validSections.length} section(s).`);
     errorDetails.push(`Available classrooms: ${classrooms.length}`);
     errorDetails.push(`Existing assignments: ${existingAssignments.length}`);
-    
+
     // Check if there are too many sections
     if (validSections.length > 20) {
       errorDetails.push(`Consider reducing the number of sections (currently ${validSections.length}).`);
     }
-    
+
     // Check if there are enough classrooms
     if (classrooms.length < validSections.length) {
       errorDetails.push(`Not enough classrooms (${classrooms.length}) for ${validSections.length} sections.`);
     }
-    
+
     // Check for instructor conflicts
     const instructorCounts = {};
     validSections.forEach(s => {
@@ -559,7 +574,7 @@ async function generateSchedule(sectionIds, semester, year) {
     if (overloadedInstructors.length > 0) {
       errorDetails.push(`Some instructors have too many sections (${overloadedInstructors.length} instructor(s) with >5 sections).`);
     }
-    
+
     throw new ValidationError(errorDetails.join(' '));
   }
 
@@ -610,7 +625,7 @@ async function applySchedule(scheduleData) {
         ]
       };
 
-      await section.update({ 
+      await section.update({
         scheduleJson,
         classroomId: item.classroomId
       }, { transaction: t });
@@ -644,8 +659,8 @@ async function getMySchedule(userId, userRole, semester, year) {
             year
           },
           include: [
-            { 
-              model: Course, 
+            {
+              model: Course,
               as: 'course',
               required: true, // Only include sections with valid courses
               paranoid: true // Exclude soft-deleted courses
@@ -666,8 +681,8 @@ async function getMySchedule(userId, userRole, semester, year) {
         year
       },
       include: [
-        { 
-          model: Course, 
+        {
+          model: Course,
           as: 'course',
           required: true, // Only include sections with valid courses
           paranoid: true // Exclude soft-deleted courses
