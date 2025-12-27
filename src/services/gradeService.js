@@ -16,7 +16,7 @@ const calculateLetterGrade = (midterm, final) => {
   const finalValue = final;
 
   const total = (midtermValue * 0.4) + (finalValue * 0.6);
-  
+
   if (total >= 90) return 'A';
   if (total >= 85) return 'A-';
   if (total >= 80) return 'B+';
@@ -33,10 +33,10 @@ const calculateLetterGrade = (midterm, final) => {
 // Calculate grade point from letter grade
 const calculateGradePoint = (letterGrade) => {
   if (!letterGrade) return null;
-  
+
   // Trim and normalize the letter grade
   const normalizedGrade = String(letterGrade).trim().toUpperCase();
-  
+
   const gradePoints = {
     'A': 4.0,
     'A-': 3.7,
@@ -50,19 +50,19 @@ const calculateGradePoint = (letterGrade) => {
     'D': 1.0,
     'F': 0.0
   };
-  
+
   const result = gradePoints[normalizedGrade];
-  console.log('calculateGradePoint:', { 
-    originalLetterGrade: letterGrade, 
+  console.log('calculateGradePoint:', {
+    originalLetterGrade: letterGrade,
     normalizedGrade,
-    result 
+    result
   });
   return result !== undefined ? result : null;
 };
 
 const myGrades = async (studentId, filters = {}) => {
   const { year, semester } = filters;
-  
+
   // Build where clause for section filtering (ONLY for filtered grades display, NOT for CGPA)
   const sectionWhere = {};
   if (year !== undefined && year !== null && year !== '') {
@@ -71,9 +71,9 @@ const myGrades = async (studentId, filters = {}) => {
   if (semester !== undefined && semester !== null && semester !== '') {
     sectionWhere.semester = semester;
   }
-  
+
   console.log('myGrades called with filters:', { studentId, filters, sectionWhere });
-  
+
   const enrollments = await Enrollment.findAll({
     where: {
       studentId,
@@ -100,7 +100,7 @@ const myGrades = async (studentId, filters = {}) => {
   const grades = enrollments.map((enrollment) => {
     // If gradePoint is null but letterGrade exists, calculate it
     let gradePoint = enrollment.gradePoint;
-    
+
     // Convert to number if it's a string
     if (typeof gradePoint === 'string') {
       gradePoint = parseFloat(gradePoint);
@@ -108,7 +108,7 @@ const myGrades = async (studentId, filters = {}) => {
         gradePoint = null;
       }
     }
-    
+
     if ((gradePoint === null || gradePoint === undefined) && enrollment.letterGrade) {
       gradePoint = calculateGradePoint(enrollment.letterGrade);
       console.log('Calculated gradePoint for enrollment:', enrollment.id, {
@@ -117,13 +117,13 @@ const myGrades = async (studentId, filters = {}) => {
         calculatedGradePoint: gradePoint
       });
     }
-    
+
     // Ensure gradePoint is never null if letterGrade exists
     if ((gradePoint === null || gradePoint === undefined) && enrollment.letterGrade) {
       gradePoint = 0.0; // Default to 0.0 if calculation fails
       console.warn('gradePoint calculation failed, defaulting to 0.0 for enrollment:', enrollment.id);
     }
-    
+
     // Ensure gradePoint is a number
     if (gradePoint !== null && gradePoint !== undefined) {
       gradePoint = parseFloat(gradePoint);
@@ -131,13 +131,13 @@ const myGrades = async (studentId, filters = {}) => {
         gradePoint = 0.0;
       }
     }
-    
+
     return {
       enrollmentId: enrollment.id,
-      courseCode: enrollment.section.course.code,
-      courseName: enrollment.section.course.name,
-      credits: enrollment.section.course.credits,
-      ects: enrollment.section.course.ects,
+      courseCode: enrollment.section?.course?.code || 'BILINMEYEN',
+      courseName: enrollment.section?.course?.name || 'Bilinmeyen Ders',
+      credits: enrollment.section?.course?.credits,
+      ects: enrollment.section?.course?.ects,
       midtermGrade: enrollment.midtermGrade,
       finalGrade: enrollment.finalGrade,
       letter: enrollment.letterGrade,
@@ -164,7 +164,7 @@ const myGrades = async (studentId, filters = {}) => {
     // Include courses with gradePoint (even if 0.0)
     return g.gradePoint !== null && g.gradePoint !== undefined;
   });
-  
+
   let gpa = null;
   if (completedGrades.length > 0) {
     const totalPoints = completedGrades.reduce((sum, g) => {
@@ -174,7 +174,7 @@ const myGrades = async (studentId, filters = {}) => {
     }, 0);
     const totalCredits = completedGrades.reduce((sum, g) => sum + parseFloat(g.credits || 0), 0);
     gpa = totalCredits > 0 ? totalPoints / totalCredits : null;
-    
+
     console.log('GPA calculation:', {
       completedGradesCount: completedGrades.length,
       completedGrades: completedGrades.map(g => ({
@@ -227,7 +227,7 @@ const myGrades = async (studentId, filters = {}) => {
       }
     ]
   });
-  
+
   console.log('CGPA query - allCompleted count:', allCompleted.length, {
     studentId,
     filters,
@@ -271,7 +271,7 @@ const myGrades = async (studentId, filters = {}) => {
         return sum + parseFloat(e.section?.course?.credits || 0);
       }, 0);
       cgpa = totalCredits > 0 ? totalPoints / totalCredits : null;
-      
+
       console.log('CGPA calculation (ALL semesters, ignoring filters):', {
         filtersApplied: filters,
         allCompletedCount: allCompleted.length,
@@ -363,51 +363,51 @@ const transcript = async (studentId) => {
       });
 
     return filteredAndSorted.map((enrollment) => {
-        // If gradePoint is null but letterGrade exists, calculate it
-        let gradePoint = enrollment.gradePoint;
-        
-        // Convert to number if it's a string
-        if (typeof gradePoint === 'string') {
-          gradePoint = parseFloat(gradePoint);
-          if (isNaN(gradePoint)) {
-            gradePoint = null;
-          }
+      // If gradePoint is null but letterGrade exists, calculate it
+      let gradePoint = enrollment.gradePoint;
+
+      // Convert to number if it's a string
+      if (typeof gradePoint === 'string') {
+        gradePoint = parseFloat(gradePoint);
+        if (isNaN(gradePoint)) {
+          gradePoint = null;
         }
-        
-        if ((gradePoint === null || gradePoint === undefined) && enrollment.letterGrade) {
-          gradePoint = calculateGradePoint(enrollment.letterGrade);
+      }
+
+      if ((gradePoint === null || gradePoint === undefined) && enrollment.letterGrade) {
+        gradePoint = calculateGradePoint(enrollment.letterGrade);
+      }
+
+      // Ensure gradePoint is never null if letterGrade exists
+      if ((gradePoint === null || gradePoint === undefined) && enrollment.letterGrade) {
+        gradePoint = 0.0; // Default to 0.0 if calculation fails
+      }
+
+      // Ensure gradePoint is a number
+      if (gradePoint !== null && gradePoint !== undefined) {
+        gradePoint = parseFloat(gradePoint);
+        if (isNaN(gradePoint)) {
+          gradePoint = 0.0;
         }
-        
-        // Ensure gradePoint is never null if letterGrade exists
-        if ((gradePoint === null || gradePoint === undefined) && enrollment.letterGrade) {
-          gradePoint = 0.0; // Default to 0.0 if calculation fails
-        }
-        
-        // Ensure gradePoint is a number
-        if (gradePoint !== null && gradePoint !== undefined) {
-          gradePoint = parseFloat(gradePoint);
-          if (isNaN(gradePoint)) {
-            gradePoint = 0.0;
-          }
-        }
-        
-        // Safe access to nested properties
-        const section = enrollment.section || {};
-        const course = section.course || {};
-        
-        return {
-          courseCode: course.code || 'N/A',
-          courseName: course.name || 'N/A',
-          credits: course.credits || 0,
-          ects: course.ects || 0,
-          semester: section.semester || 'N/A',
-          year: section.year || null,
-          midtermGrade: enrollment.midtermGrade,
-          finalGrade: enrollment.finalGrade,
-          letterGrade: enrollment.letterGrade,
-          gradePoint: gradePoint // This should now be a number
-        };
-      });
+      }
+
+      // Safe access to nested properties
+      const section = enrollment.section || {};
+      const course = section.course || {};
+
+      return {
+        courseCode: course.code || 'N/A',
+        courseName: course.name || 'N/A',
+        credits: course.credits || 0,
+        ects: course.ects || 0,
+        semester: section.semester || 'N/A',
+        year: section.year || null,
+        midtermGrade: enrollment.midtermGrade,
+        finalGrade: enrollment.finalGrade,
+        letterGrade: enrollment.letterGrade,
+        gradePoint: gradePoint // This should now be a number
+      };
+    });
   } catch (error) {
     console.error('Error in transcript service:', error);
     throw error;
@@ -455,7 +455,7 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
         as: 'student'
       }]
     });
-    
+
     // Güvenlik kontrolü: Öğrenci bu bölüme mi ait?
     if (!enrollment || enrollment.sectionId !== parseInt(sectionId)) {
       continue;
@@ -469,8 +469,8 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
     const letterGrade = calculateLetterGrade(midtermGrade, finalGrade);
     const calculatedGradePoint = letterGrade ? calculateGradePoint(letterGrade) : null;
     // Ensure gradePoint is a number, not a string
-    const gradePoint = calculatedGradePoint !== null && calculatedGradePoint !== undefined 
-      ? parseFloat(calculatedGradePoint) 
+    const gradePoint = calculatedGradePoint !== null && calculatedGradePoint !== undefined
+      ? parseFloat(calculatedGradePoint)
       : null;
 
     // Status'ü harf notuna göre güncelle
@@ -478,7 +478,7 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
     // - F ise -> 'failed'
     // - F değilse (geçti) -> 'completed'
     let newStatus = enrollment.status; // Varsayılan olarak mevcut status'ü koru
-    
+
     // Final notu girildiyse (null değilse) ders tamamlanmış sayılır
     if (finalGrade !== null && finalGrade !== undefined && !isNaN(finalGrade)) {
       if (letterGrade) {
@@ -504,19 +504,19 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
     });
 
     // Bildirim gönder: Eğer final notu yeni girildiyse veya güncellendiyse
-    const isNewGrade = (previousFinalGrade === null || previousFinalGrade === undefined) && 
-                       (finalGrade !== null && finalGrade !== undefined);
-    const isUpdatedGrade = previousFinalGrade !== null && 
-                          previousFinalGrade !== undefined && 
-                          previousFinalGrade !== finalGrade &&
-                          finalGrade !== null && 
-                          finalGrade !== undefined;
+    const isNewGrade = (previousFinalGrade === null || previousFinalGrade === undefined) &&
+      (finalGrade !== null && finalGrade !== undefined);
+    const isUpdatedGrade = previousFinalGrade !== null &&
+      previousFinalGrade !== undefined &&
+      previousFinalGrade !== finalGrade &&
+      finalGrade !== null &&
+      finalGrade !== undefined;
 
     if (isNewGrade || isUpdatedGrade) {
       try {
         const title = `${courseCode} - Not Girişi`;
         let message = `${courseCode} - ${courseName} dersiniz için not girişi yapıldı.`;
-        
+
         if (midtermGrade !== null && midtermGrade !== undefined) {
           message += ` Vize: ${midtermGrade}`;
         }

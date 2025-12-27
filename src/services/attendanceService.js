@@ -45,8 +45,8 @@ const checkAndNotifyAttendanceStatus = async (studentId, sectionId) => {
 
     const totalSessions = allSessions.length;
     const attendedCount = attendanceRecords.length;
-    const attendancePercentage = totalSessions > 0 
-      ? Math.round((attendedCount / totalSessions) * 100) 
+    const attendancePercentage = totalSessions > 0
+      ? Math.round((attendedCount / totalSessions) * 100)
       : 0;
 
     // Kritik eşik: %70
@@ -63,8 +63,8 @@ const checkAndNotifyAttendanceStatus = async (studentId, sectionId) => {
       });
 
       if (section && section.course) {
-        const courseCode = section.course.code || 'N/A';
-        const courseName = section.course.name || 'N/A';
+        const courseCode = section.course?.code || 'N/A';
+        const courseName = section.course?.name || 'N/A';
 
         // Daha önce bu ders için bildirim gönderilmiş mi kontrol et
         // PostgreSQL JSONB sorgusu için Sequelize.literal kullan
@@ -136,7 +136,7 @@ const attendanceService = {
 
     // QR kod oluştur (session ID ile birlikte)
     const qrCode = generateSessionCode();
-    
+
     // Tarih ve saat formatı
     const sessionDate = date || new Date().toISOString().split('T')[0];
     const sessionStartTime = startTime || new Date().toTimeString().split(' ')[0].substring(0, 5);
@@ -173,7 +173,7 @@ const attendanceService = {
   // Oturumu kapat
   closeSession: async (sessionId, userId) => {
     const session = await db.AttendanceSession.findByPk(sessionId);
-    
+
     if (!session) {
       throw new ValidationError('Session not found');
     }
@@ -227,7 +227,7 @@ const attendanceService = {
       // Tarih string'ini (YYYY-MM-DD) ve saat string'ini (HH:mm:ss) birleştir
       let startDateTime = null;
       let endDateTime = null;
-      
+
       if (session.startTime) {
         const [startHours, startMinutes, startSeconds] = session.startTime.split(':').map(Number);
         // Tarih ve saati birleştir, Türkiye timezone'unda (GMT+3) yorumla
@@ -235,18 +235,18 @@ const attendanceService = {
         const dateTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
         startDateTime = new Date(dateTimeString);
       }
-      
+
       if (session.endTime) {
         const [endHours, endMinutes, endSeconds] = session.endTime.split(':').map(Number);
         const dateTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
         endDateTime = new Date(dateTimeString);
       }
-      
+
       return {
         id: session.id,
         qrCode: session.qrCode,
         sectionId: session.sectionId,
-        sectionName: session.section?.course?.code 
+        sectionName: session.section?.course?.code
           ? `${session.section.course.code} - ${session.section.course.name}`
           : `Section ${session.sectionId}`,
         code: session.section?.course?.code || 'N/A',
@@ -357,13 +357,13 @@ const attendanceService = {
     // Date ve Time'i birleştir - Türkiye timezone (GMT+3) için
     let startDateTime = null;
     let endDateTime = null;
-    
+
     if (session.startTime) {
       const [startHours, startMinutes, startSeconds] = session.startTime.split(':').map(Number);
       const dateTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
       startDateTime = new Date(dateTimeString);
     }
-    
+
     if (session.endTime) {
       const [endHours, endMinutes, endSeconds] = session.endTime.split(':').map(Number);
       const dateTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
@@ -411,28 +411,28 @@ const attendanceService = {
 
     // Oturum aktif mi ve zamanında mı kontrol et
     const now = new Date();
-    
+
     // startTime ve endTime TIME tipinde (HH:mm:ss), date ile birleştir
     // Türkiye timezone (GMT+3) için
     const startTimeStr = session.startTime; // TIME format: "HH:mm:ss"
     const endTimeStr = session.endTime; // TIME format: "HH:mm:ss" (nullable)
-    
+
     // Date ve Time'i birleştir - Türkiye timezone'unda (GMT+3)
     const [startHours, startMinutes, startSeconds] = startTimeStr.split(':').map(Number);
     const startTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
     const startTime = new Date(startTimeString);
-    
+
     let endTime = null;
     if (endTimeStr) {
       const [endHours, endMinutes, endSeconds] = endTimeStr.split(':').map(Number);
       const endTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
       endTime = new Date(endTimeString);
     }
-    
-    console.log('⏰ Time check:', { 
-      now: now.toISOString(), 
+
+    console.log('⏰ Time check:', {
+      now: now.toISOString(),
       sessionDate: session.date,
-      startTime: startTime.toISOString(), 
+      startTime: startTime.toISOString(),
       endTime: endTime ? endTime.toISOString() : 'null',
       status: session.status,
       isBeforeStart: now < startTime,
@@ -474,10 +474,10 @@ const attendanceService = {
     const parsedSessionLat = parseFloat(session.latitude);
     const parsedSessionLng = parseFloat(session.longitude);
 
-    console.log('📐 Parsed coordinates:', { 
-      parsedLat, 
-      parsedLng, 
-      parsedSessionLat, 
+    console.log('📐 Parsed coordinates:', {
+      parsedLat,
+      parsedLng,
+      parsedSessionLat,
       parsedSessionLng,
       geofenceRadius: session.geofenceRadius
     });
@@ -564,28 +564,28 @@ const attendanceService = {
 
     // Oturum aktif mi ve zamanında mı kontrol et
     const now = new Date();
-    
+
     // startTime ve endTime TIME tipinde (HH:mm:ss), date ile birleştir
     // Türkiye timezone (GMT+3) için
     const startTimeStr = session.startTime; // TIME format: "HH:mm:ss"
     const endTimeStr = session.endTime; // TIME format: "HH:mm:ss" (nullable)
-    
+
     // Date ve Time'i birleştir - Türkiye timezone'unda (GMT+3)
     const [startHours, startMinutes, startSeconds] = startTimeStr.split(':').map(Number);
     const startTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
     const startTime = new Date(startTimeString);
-    
+
     let endTime = null;
     if (endTimeStr) {
       const [endHours, endMinutes, endSeconds] = endTimeStr.split(':').map(Number);
       const endTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
       endTime = new Date(endTimeString);
     }
-    
-    console.log('⏰ Time check:', { 
-      now: now.toISOString(), 
+
+    console.log('⏰ Time check:', {
+      now: now.toISOString(),
       sessionDate: session.date,
-      startTime: startTime.toISOString(), 
+      startTime: startTime.toISOString(),
       endTime: endTime ? endTime.toISOString() : 'null',
       status: session.status,
       isBeforeStart: now < startTime,
@@ -627,10 +627,10 @@ const attendanceService = {
     const parsedSessionLat = parseFloat(session.latitude);
     const parsedSessionLng = parseFloat(session.longitude);
 
-    console.log('📐 Parsed coordinates:', { 
-      parsedLat, 
-      parsedLng, 
-      parsedSessionLat, 
+    console.log('📐 Parsed coordinates:', {
+      parsedLat,
+      parsedLng,
+      parsedSessionLat,
       parsedSessionLng,
       geofenceRadius: session.geofenceRadius
     });
@@ -729,13 +729,13 @@ const attendanceService = {
       // Date ve Time'i birleştir - Türkiye timezone (GMT+3) için
       let startDateTime = null;
       let endDateTime = null;
-      
+
       if (record.session?.date && record.session?.startTime) {
         const [startHours, startMinutes, startSeconds] = record.session.startTime.split(':').map(Number);
         const dateTimeString = `${record.session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
         startDateTime = new Date(dateTimeString);
       }
-      
+
       if (record.session?.date && record.session?.endTime) {
         const [endHours, endMinutes, endSeconds] = record.session.endTime.split(':').map(Number);
         const dateTimeString = `${record.session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
@@ -845,16 +845,16 @@ const attendanceService = {
       Array.from(allSectionIds).map(async (sectionId) => {
         const enrollment = enrollments.find(e => e.sectionId === sectionId);
         const additionalSection = additionalSections.find(s => s.id === sectionId);
-        
+
         // Section bilgisini al
         let section;
         let course;
         let sectionNumber;
-        
+
         if (enrollment) {
           section = enrollment.section;
-          course = enrollment.section.course;
-          sectionNumber = enrollment.section.sectionNumber;
+          course = enrollment.section?.course;
+          sectionNumber = enrollment.section?.sectionNumber;
         } else if (additionalSection) {
           section = additionalSection;
           course = additionalSection.course;
@@ -863,7 +863,7 @@ const attendanceService = {
           // Section bulunamadıysa atla
           return null;
         }
-        
+
         // Bu section için tüm oturumları getir
         const allSessions = await db.AttendanceSession.findAll({
           where: { sectionId },
@@ -882,22 +882,22 @@ const attendanceService = {
 
         // Katıldığı oturum ID'lerini set olarak tut
         const attendedSessionIds = new Set(attendanceRecords.map(r => r.sessionId));
-        
+
         // Oturum detaylarını hazırla
         const now = new Date();
         const sessions = allSessions.map(session => {
           const record = attendanceRecords.find(r => r.sessionId === session.id);
-          
+
           // Date ve Time'i birleştir - Türkiye timezone (GMT+3) için
           let startDateTime = null;
           let endDateTime = null;
-          
+
           if (session.date && session.startTime) {
             const [startHours, startMinutes, startSeconds] = session.startTime.split(':').map(Number);
             const dateTimeString = `${session.date}T${String(startHours).padStart(2, '0')}:${String(startMinutes).padStart(2, '0')}:${String(startSeconds || 0).padStart(2, '0')}+03:00`;
             startDateTime = new Date(dateTimeString);
           }
-          
+
           if (session.date && session.endTime) {
             const [endHours, endMinutes, endSeconds] = session.endTime.split(':').map(Number);
             const dateTimeString = `${session.date}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:${String(endSeconds || 0).padStart(2, '0')}+03:00`;
@@ -918,7 +918,7 @@ const attendanceService = {
           }
 
           const isExcused = record && record.flagReason && record.flagReason.includes('Mazeretli');
-          
+
           return {
             id: session.id,
             date: session.date,
@@ -935,15 +935,15 @@ const attendanceService = {
 
         const totalSessions = allSessions.length;
         const attendedCount = attendanceRecords.length;
-        const attendancePercentage = totalSessions > 0 
-          ? Math.round((attendedCount / totalSessions) * 100) 
+        const attendancePercentage = totalSessions > 0
+          ? Math.round((attendedCount / totalSessions) * 100)
           : 0;
 
         return {
           sectionId: sectionId,
           course: {
-            code: course.code,
-            name: course.name
+            code: course?.code || 'N/A',
+            name: course?.name || 'Bilinmeyen Ders'
           },
           sectionNumber: sectionNumber,
           totalSessions,
