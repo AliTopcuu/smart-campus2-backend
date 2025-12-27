@@ -832,7 +832,8 @@ const attendanceService = {
       include: [{
         model: db.Course,
         as: 'course',
-        attributes: ['id', 'code', 'name']
+        attributes: ['id', 'code', 'name'],
+        required: true // Only where Course exists
       }]
     });
 
@@ -863,6 +864,11 @@ const attendanceService = {
           sectionNumber = additionalSection.sectionNumber;
         } else {
           // Section bulunamadıysa atla
+          return null;
+        }
+
+        // Eğer Course silinmişse (course null ise) atla
+        if (!course) {
           return null;
         }
 
