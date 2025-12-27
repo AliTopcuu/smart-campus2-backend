@@ -62,7 +62,7 @@ const initSocket = (server) => {
         }
 
         socket.on("disconnect", () => {
-            console.log(`🔌 WebSocket Disconnected: User ${socket.user.id}`);
+            console.log(`🔌 WebSocket Disconnected: User ${socket.user.id} ❌`);
         });
     });
 
