@@ -155,8 +155,8 @@ const enroll = async (studentId, sectionId) => {
     // Check if any enrollment exists for this student-section combination
     // Unique constraint allows only one enrollment per student-section pair
     const existingEnrollment = await Enrollment.findOne({
-      where: { 
-        studentId, 
+      where: {
+        studentId,
         sectionId
       }
     });
@@ -181,19 +181,19 @@ const enroll = async (studentId, sectionId) => {
             }
           ]
         });
-        
+
         if (!section) {
           throw new Error('Section not found');
         }
-        
+
         // Check prerequisites
         await checkPrerequisites(section.courseId, studentId);
-        
+
         // Check capacity
         if (section.enrolledCount >= section.capacity) {
           throw new Error('Section is full');
         }
-        
+
         // Check schedule conflict (only with enrolled courses)
         const enrolledSections = await Enrollment.findAll({
           where: {
@@ -244,9 +244,9 @@ const enroll = async (studentId, sectionId) => {
                     continue;
                   }
                 }
-                
+
                 if (!existingSchedule) continue;
-                
+
                 // Check new format
                 if (Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
                   for (const existingItem of existingSchedule.scheduleItems) {
@@ -255,7 +255,7 @@ const enroll = async (studentId, sectionId) => {
                       const newEnd = timeToMinutes(newItem.endTime);
                       const existingStart = timeToMinutes(existingItem.startTime);
                       const existingEnd = timeToMinutes(existingItem.endTime);
-                      
+
                       if ((newStart < existingEnd && newEnd > existingStart)) {
                         const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
                         const courseName = enrolledEnrollment.section.course?.name || 'Ders';
@@ -271,7 +271,7 @@ const enroll = async (studentId, sectionId) => {
                     const newEnd = timeToMinutes(newItem.endTime);
                     const existingStart = timeToMinutes(existingSchedule.startTime);
                     const existingEnd = timeToMinutes(existingSchedule.endTime);
-                    
+
                     if ((newStart < existingEnd && newEnd > existingStart)) {
                       const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
                       const courseName = enrolledEnrollment.section.course?.name || 'Ders';
@@ -293,9 +293,9 @@ const enroll = async (studentId, sectionId) => {
                   continue;
                 }
               }
-              
+
               if (!existingSchedule) continue;
-              
+
               // Check new format
               if (Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
                 for (const existingItem of existingSchedule.scheduleItems) {
@@ -304,7 +304,7 @@ const enroll = async (studentId, sectionId) => {
                     const newEnd = timeToMinutes(scheduleJson.endTime);
                     const existingStart = timeToMinutes(existingItem.startTime);
                     const existingEnd = timeToMinutes(existingItem.endTime);
-                    
+
                     if ((newStart < existingEnd && newEnd > existingStart)) {
                       const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
                       const courseName = enrolledEnrollment.section.course?.name || 'Ders';
@@ -332,19 +332,19 @@ const enroll = async (studentId, sectionId) => {
             }
           }
         }
-        
+
         // Update existing enrollment to pending
         await existingEnrollment.update({
           status: 'pending',
           enrollmentDate: new Date()
         });
-        
+
         return {
           message: 'Enrollment request resubmitted. Waiting for instructor approval.',
           enrollment: existingEnrollment
         };
       }
-      
+
       // Should not reach here, but just in case
       throw new Error('Cannot enroll in this section with your current enrollment status');
     }
@@ -423,9 +423,9 @@ const enroll = async (studentId, sectionId) => {
                 continue;
               }
             }
-            
+
             if (!existingSchedule) continue;
-            
+
             // Check new format
             if (Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
               for (const existingItem of existingSchedule.scheduleItems) {
@@ -434,7 +434,7 @@ const enroll = async (studentId, sectionId) => {
                   const newEnd = timeToMinutes(newItem.endTime);
                   const existingStart = timeToMinutes(existingItem.startTime);
                   const existingEnd = timeToMinutes(existingItem.endTime);
-                  
+
                   if ((newStart < existingEnd && newEnd > existingStart)) {
                     const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
                     const courseName = enrolledEnrollment.section.course?.name || 'Ders';
@@ -450,7 +450,7 @@ const enroll = async (studentId, sectionId) => {
                 const newEnd = timeToMinutes(newItem.endTime);
                 const existingStart = timeToMinutes(existingSchedule.startTime);
                 const existingEnd = timeToMinutes(existingSchedule.endTime);
-                
+
                 if ((newStart < existingEnd && newEnd > existingStart)) {
                   const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
                   const courseName = enrolledEnrollment.section.course?.name || 'Ders';
@@ -472,9 +472,9 @@ const enroll = async (studentId, sectionId) => {
               continue;
             }
           }
-          
+
           if (!existingSchedule) continue;
-          
+
           // Check new format
           if (Array.isArray(existingSchedule.scheduleItems) && existingSchedule.scheduleItems.length > 0) {
             for (const existingItem of existingSchedule.scheduleItems) {
@@ -483,7 +483,7 @@ const enroll = async (studentId, sectionId) => {
                 const newEnd = timeToMinutes(scheduleJson.endTime);
                 const existingStart = timeToMinutes(existingItem.startTime);
                 const existingEnd = timeToMinutes(existingItem.endTime);
-                
+
                 if ((newStart < existingEnd && newEnd > existingStart)) {
                   const courseCode = enrolledEnrollment.section.course?.code || 'Bilinmeyen';
                   const courseName = enrolledEnrollment.section.course?.name || 'Ders';
@@ -632,7 +632,7 @@ const myCourses = async (studentId) => {
   const enrollmentsWithAttendance = await Promise.all(
     enrollments.map(async (enrollment) => {
       const sectionId = enrollment.sectionId;
-      
+
       // Always fetch scheduleJson directly from database to ensure we get it
       // Sequelize JSONB fields sometimes don't come through in includes
       let scheduleJson = null;
@@ -642,10 +642,10 @@ const myCourses = async (studentId) => {
           attributes: ['id', 'scheduleJson'],
           raw: true // Get raw data, not Sequelize instance
         });
-        
+
         if (sectionRaw && sectionRaw.scheduleJson !== null && sectionRaw.scheduleJson !== undefined) {
           scheduleJson = sectionRaw.scheduleJson;
-          
+
           console.log('ScheduleJson from Sequelize raw query:', {
             enrollmentId: enrollment.id,
             sectionId: sectionId,
@@ -654,27 +654,27 @@ const myCourses = async (studentId) => {
             sectionRaw: sectionRaw
           });
         }
-        
+
         // If raw query didn't work, try Sequelize instance
         if (!scheduleJson) {
           const sectionDirect = await CourseSection.findByPk(sectionId, {
             attributes: ['id', 'scheduleJson'],
             raw: false // Get Sequelize instance
           });
-          
+
           if (sectionDirect) {
             // Use toJSON() to get plain object, then get scheduleJson
             const sectionData = sectionDirect.toJSON ? sectionDirect.toJSON() : sectionDirect;
             scheduleJson = sectionData.scheduleJson;
-            
+
             // Also try direct access methods
             if (!scheduleJson || scheduleJson === null || scheduleJson === undefined) {
-              scheduleJson = sectionDirect.scheduleJson || 
-                            sectionDirect.get?.('scheduleJson') ||
-                            sectionDirect.dataValues?.scheduleJson ||
-                            null;
+              scheduleJson = sectionDirect.scheduleJson ||
+                sectionDirect.get?.('scheduleJson') ||
+                sectionDirect.dataValues?.scheduleJson ||
+                null;
             }
-            
+
             console.log('ScheduleJson from Sequelize instance:', {
               enrollmentId: enrollment.id,
               sectionId: sectionId,
@@ -689,7 +689,7 @@ const myCourses = async (studentId) => {
       } catch (e) {
         console.error('Error fetching scheduleJson:', e);
       }
-      
+
       // Parse if string (Sequelize sometimes returns JSONB as string)
       if (typeof scheduleJson === 'string' && scheduleJson !== 'null' && scheduleJson.trim() !== '') {
         try {
@@ -700,12 +700,12 @@ const myCourses = async (studentId) => {
           scheduleJson = null;
         }
       }
-      
+
       // If it's the string "null", set to null
       if (scheduleJson === 'null') {
         scheduleJson = null;
       }
-      
+
       // Final check - if still null, log it
       if (!scheduleJson) {
         console.warn('ScheduleJson is null for sectionId:', sectionId, 'enrollmentId:', enrollment.id);
@@ -718,7 +718,7 @@ const myCourses = async (studentId) => {
           scheduleJsonStringified: JSON.stringify(scheduleJson)
         });
       }
-      
+
       // Debug: Log raw enrollment data to check if grades are present
       if (process.env.NODE_ENV === 'development') {
         console.log('Raw enrollment data for studentId:', studentId, {
@@ -746,25 +746,25 @@ const myCourses = async (studentId) => {
         attributes: ['id']
       });
       const sessionIdList = sessionIds.map(s => s.id);
-      
+
       const attendedSessions = sessionIdList.length > 0
         ? await AttendanceRecord.count({
-            where: {
-              studentId,
-              sessionId: { [Op.in]: sessionIdList }
-            }
-          })
+          where: {
+            studentId,
+            sessionId: { [Op.in]: sessionIdList }
+          }
+        })
         : 0;
 
       // Get excused absences
       const excusedAbsences = sessionIdList.length > 0
         ? await db.ExcuseRequest.count({
-            where: {
-              studentId,
-              status: 'approved',
-              sessionId: { [Op.in]: sessionIdList }
-            }
-          })
+          where: {
+            studentId,
+            status: 'approved',
+            sessionId: { [Op.in]: sessionIdList }
+          }
+        })
         : 0;
 
       const attendancePercentage =
@@ -780,7 +780,7 @@ const myCourses = async (studentId) => {
           scheduleJson = null;
         }
       }
-      
+
       // If it's the string "null", set to null
       if (scheduleJson === 'null') {
         scheduleJson = null;
@@ -804,31 +804,31 @@ const myCourses = async (studentId) => {
       const finalValue = enrollment.get ? enrollment.get('finalGrade') : enrollment.finalGrade;
       const letterValue = enrollment.get ? enrollment.get('letterGrade') : enrollment.letterGrade;
       const gradePointValue = enrollment.get ? enrollment.get('gradePoint') : enrollment.gradePoint;
-      
+
       const grades = {
-          midterm: (midtermValue !== null && 
-                   midtermValue !== undefined && 
-                   midtermValue !== '' &&
-                   !isNaN(midtermValue))
-            ? parseFloat(midtermValue)
-            : null,
-          final: (finalValue !== null && 
-                 finalValue !== undefined && 
-                 finalValue !== '' &&
-                 !isNaN(finalValue))
-            ? parseFloat(finalValue)
-            : null,
-          letter: (letterValue && String(letterValue).trim() !== '') 
-            ? String(letterValue).trim()
-            : null,
-          gradePoint: (gradePointValue !== null && 
-                      gradePointValue !== undefined && 
-                      gradePointValue !== '' &&
-                      !isNaN(gradePointValue))
-            ? parseFloat(gradePointValue)
-            : null
+        midterm: (midtermValue !== null &&
+          midtermValue !== undefined &&
+          midtermValue !== '' &&
+          !isNaN(midtermValue))
+          ? parseFloat(midtermValue)
+          : null,
+        final: (finalValue !== null &&
+          finalValue !== undefined &&
+          finalValue !== '' &&
+          !isNaN(finalValue))
+          ? parseFloat(finalValue)
+          : null,
+        letter: (letterValue && String(letterValue).trim() !== '')
+          ? String(letterValue).trim()
+          : null,
+        gradePoint: (gradePointValue !== null &&
+          gradePointValue !== undefined &&
+          gradePointValue !== '' &&
+          !isNaN(gradePointValue))
+          ? parseFloat(gradePointValue)
+          : null
       };
-      
+
       // Debug: Log processed grades
       if (process.env.NODE_ENV === 'development') {
         console.log('Processed grades for enrollmentId:', enrollment.id, {
@@ -836,7 +836,7 @@ const myCourses = async (studentId) => {
           processed: grades
         });
       }
-      
+
       // Final debug log before returning
       console.log('Final return data for enrollment:', enrollment.id, {
         scheduleJson,
@@ -845,16 +845,16 @@ const myCourses = async (studentId) => {
         sectionId: sectionId,
         willReturnScheduleJson: !!scheduleJson
       });
-      
+
       const returnData = {
         enrollmentId: enrollment.id,
         sectionId: enrollment.sectionId, // Section ID'yi ekle
         status: enrollment.status, // Öğrenci dersin durumunu görsün (Tamamlandı/Kaldı/Devam Ediyor)
         course: {
-          code: enrollment.section.course.code,
-          name: enrollment.section.course.name,
-          credits: enrollment.section.course.credits,
-          ects: enrollment.section.course.ects
+          code: enrollment.section?.course?.code || 'BILINMEYEN',
+          name: enrollment.section?.course?.name || 'Bilinmeyen Ders',
+          credits: enrollment.section?.course?.credits,
+          ects: enrollment.section?.course?.ects
         },
         section: {
           sectionNumber: enrollment.section.sectionNumber,
@@ -869,7 +869,7 @@ const myCourses = async (studentId) => {
         grades,
         attendancePercentage
       };
-      
+
       // Final verification
       console.log('Return data section object:', {
         enrollmentId: enrollment.id,
@@ -877,7 +877,7 @@ const myCourses = async (studentId) => {
         sectionScheduleJsonType: typeof returnData.section.scheduleJson,
         sectionKeys: Object.keys(returnData.section)
       });
-      
+
       return returnData;
     })
   );
@@ -900,7 +900,7 @@ const formatScheduleText = (scheduleJson) => {
   if (!scheduleJson) {
     return 'TBA';
   }
-  
+
   // New format: scheduleItems array
   if (Array.isArray(scheduleJson.scheduleItems) && scheduleJson.scheduleItems.length > 0) {
     const dayLabels = {
@@ -912,21 +912,21 @@ const formatScheduleText = (scheduleJson) => {
     };
     const scheduleTexts = scheduleJson.scheduleItems.map(item => {
       const dayLabel = dayLabels[item.day] || item.day;
-      const timeStr = item.startTime && item.endTime 
-        ? ` ${item.startTime}-${item.endTime}` 
+      const timeStr = item.startTime && item.endTime
+        ? ` ${item.startTime}-${item.endTime}`
         : '';
       return `${dayLabel}${timeStr}`;
     });
     return scheduleTexts.join(', ');
   }
-  
+
   // Old format: days array + single startTime/endTime
   if (Array.isArray(scheduleJson.days) && scheduleJson.days.length > 0 && scheduleJson.startTime) {
     const days = scheduleJson.days.join(', ');
     const time = `${scheduleJson.startTime}${scheduleJson.endTime ? ` - ${scheduleJson.endTime}` : ''}`;
     return `${days} ${time}`;
   }
-  
+
   return 'TBA';
 };
 
@@ -936,8 +936,8 @@ const sectionStudents = async (sectionId) => {
   const enrollments = await Enrollment.findAll({
     where: {
       sectionId,
-      status: { 
-        [Op.notIn]: ['dropped', 'rejected', 'pending'] 
+      status: {
+        [Op.notIn]: ['dropped', 'rejected', 'pending']
       }
     },
     include: [
