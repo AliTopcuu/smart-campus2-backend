@@ -28,6 +28,7 @@ router.use('/events', require('./eventRoutes'));
 router.use('/reservations', require('./classroomReservationRoutes'));
 router.use('/scheduling', require('./schedulingRoutes'));
 router.use('/analytics', require('./analyticsRoutes'));
+router.use('/notifications', require('./notificationRoutes'));
 
 module.exports = router;
 

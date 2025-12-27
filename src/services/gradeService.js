@@ -1,6 +1,7 @@
 const db = require('../models');
 const { Enrollment, CourseSection, Course, User } = db;
 const { Op } = db.Sequelize;
+const notificationService = require('./notificationService');
 
 // Calculate letter grade from numeric grade
 // Final notu girildiyse, midterm null olsa bile hesapla (midterm 0 olarak sayılır)
@@ -429,7 +430,12 @@ const transcriptPdf = async (studentId) => {
 
 const saveGrades = async (sectionId, instructorId, gradesData) => {
   // Hoca yetkisi kontrolü
-  const section = await CourseSection.findByPk(sectionId);
+  const section = await CourseSection.findByPk(sectionId, {
+    include: [{
+      model: Course,
+      as: 'course'
+    }]
+  });
   if (!section) {
     throw new Error('Section not found');
   }
@@ -439,15 +445,23 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
   }
 
   const { grades } = gradesData;
+  const courseCode = section.course?.code || 'N/A';
+  const courseName = section.course?.name || 'N/A';
 
   for (const gradeData of grades) {
-    const enrollment = await Enrollment.findByPk(gradeData.enrollmentId);
+    const enrollment = await Enrollment.findByPk(gradeData.enrollmentId, {
+      include: [{
+        model: User,
+        as: 'student'
+      }]
+    });
     
     // Güvenlik kontrolü: Öğrenci bu bölüme mi ait?
     if (!enrollment || enrollment.sectionId !== parseInt(sectionId)) {
       continue;
     }
 
+    const previousFinalGrade = enrollment.finalGrade;
     const midtermGrade = gradeData.midtermGrade !== undefined ? parseFloat(gradeData.midtermGrade) : enrollment.midtermGrade;
     const finalGrade = gradeData.finalGrade !== undefined ? parseFloat(gradeData.finalGrade) : enrollment.finalGrade;
 
@@ -488,6 +502,52 @@ const saveGrades = async (sectionId, instructorId, gradesData) => {
       gradePoint,
       status: newStatus // Status'ü harf notuna göre güncelle
     });
+
+    // Bildirim gönder: Eğer final notu yeni girildiyse veya güncellendiyse
+    const isNewGrade = (previousFinalGrade === null || previousFinalGrade === undefined) && 
+                       (finalGrade !== null && finalGrade !== undefined);
+    const isUpdatedGrade = previousFinalGrade !== null && 
+                          previousFinalGrade !== undefined && 
+                          previousFinalGrade !== finalGrade &&
+                          finalGrade !== null && 
+                          finalGrade !== undefined;
+
+    if (isNewGrade || isUpdatedGrade) {
+      try {
+        const title = `${courseCode} - Not Girişi`;
+        let message = `${courseCode} - ${courseName} dersiniz için not girişi yapıldı.`;
+        
+        if (midtermGrade !== null && midtermGrade !== undefined) {
+          message += ` Vize: ${midtermGrade}`;
+        }
+        if (finalGrade !== null && finalGrade !== undefined) {
+          message += ` Final: ${finalGrade}`;
+        }
+        if (letterGrade) {
+          message += ` Harf Notu: ${letterGrade}`;
+        }
+
+        await notificationService.createNotification(
+          enrollment.studentId,
+          'grade',
+          title,
+          message,
+          {
+            courseCode,
+            courseName,
+            sectionId: section.id,
+            enrollmentId: enrollment.id,
+            midtermGrade,
+            finalGrade,
+            letterGrade,
+            gradePoint
+          }
+        );
+      } catch (error) {
+        // Bildirim gönderme hatası not girişini engellemez
+        console.error('Error sending grade notification:', error);
+      }
+    }
   }
 
   return {

@@ -1,6 +1,7 @@
 const db = require('../models');
 const { AppError, ValidationError, ForbiddenError } = require('../utils/errors');
 const { Op } = require('sequelize');
+const notificationService = require('./notificationService');
 
 // Haversine formula ile mesafe hesaplama (metre cinsinden)
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -19,6 +20,96 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 function generateSessionCode() {
   return `QR-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 }
+
+// Yoklama durumunu kontrol et ve kritik seviyede ise bildirim gönder
+const checkAndNotifyAttendanceStatus = async (studentId, sectionId) => {
+  try {
+    // Bu section için tüm oturumları getir
+    const allSessions = await db.AttendanceSession.findAll({
+      where: { sectionId },
+      attributes: ['id']
+    });
+
+    if (allSessions.length === 0) {
+      return; // Henüz oturum yoksa kontrol etme
+    }
+
+    // Öğrencinin bu section'daki katıldığı oturumları getir
+    const attendanceRecords = await db.AttendanceRecord.findAll({
+      where: {
+        studentId,
+        sessionId: { [Op.in]: allSessions.map(s => s.id) }
+      },
+      attributes: ['id', 'sessionId']
+    });
+
+    const totalSessions = allSessions.length;
+    const attendedCount = attendanceRecords.length;
+    const attendancePercentage = totalSessions > 0 
+      ? Math.round((attendedCount / totalSessions) * 100) 
+      : 0;
+
+    // Kritik eşik: %70
+    const CRITICAL_THRESHOLD = 70;
+
+    // Eğer yoklama yüzdesi kritik seviyenin altındaysa bildirim gönder
+    if (attendancePercentage < CRITICAL_THRESHOLD && totalSessions >= 3) {
+      // Section ve course bilgilerini al
+      const section = await db.CourseSection.findByPk(sectionId, {
+        include: [{
+          model: db.Course,
+          as: 'course'
+        }]
+      });
+
+      if (section && section.course) {
+        const courseCode = section.course.code || 'N/A';
+        const courseName = section.course.name || 'N/A';
+
+        // Daha önce bu ders için bildirim gönderilmiş mi kontrol et
+        // PostgreSQL JSONB sorgusu için Sequelize.literal kullan
+        const existingNotification = await db.Notification.findOne({
+          where: {
+            userId: studentId,
+            type: 'attendance',
+            createdAt: {
+              [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Son 7 gün içinde
+            },
+            [Op.and]: [
+              db.Sequelize.literal(`metadata->>'courseCode' = '${courseCode}'`),
+              db.Sequelize.literal(`metadata->>'sectionId' = '${sectionId}'`)
+            ]
+          }
+        });
+
+        // Eğer son 7 gün içinde bildirim gönderilmediyse yeni bildirim gönder
+        if (!existingNotification) {
+          const title = 'Yoklama Durumu Uyarısı';
+          const message = `${courseCode} - ${courseName} dersiniz için yoklama durumunuz kritik seviyede (${attendancePercentage}%). Lütfen derslere düzenli katılım sağlayın.`;
+
+          await notificationService.createNotification(
+            studentId,
+            'attendance',
+            title,
+            message,
+            {
+              courseCode,
+              courseName,
+              sectionId: section.id,
+              attendancePercentage,
+              attendedCount,
+              totalSessions,
+              criticalThreshold: CRITICAL_THRESHOLD
+            }
+          );
+        }
+      }
+    }
+  } catch (error) {
+    // Bildirim gönderme hatası yoklama kaydını engellemez
+    console.error('Error checking attendance status:', error);
+  }
+};
 
 const attendanceService = {
   // Admin/Faculty yoklama oturumu oluşturur
@@ -433,6 +524,9 @@ const attendanceService = {
       checkInTime: now
     });
 
+    // Yoklama durumunu kontrol et ve gerekirse bildirim gönder
+    await checkAndNotifyAttendanceStatus(userId, session.sectionId);
+
     return {
       id: record.id,
       sessionId: record.sessionId,
@@ -582,6 +676,9 @@ const attendanceService = {
       flagReason: !isWithinGeofence ? `Geofence dışında. Mesafe: ${Math.round(distance)}m` : null,
       checkInTime: now
     });
+
+    // Yoklama durumunu kontrol et ve gerekirse bildirim gönder
+    await checkAndNotifyAttendanceStatus(userId, session.sectionId);
 
     return {
       id: record.id,

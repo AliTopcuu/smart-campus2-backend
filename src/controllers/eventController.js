@@ -3,6 +3,7 @@ const { Event, EventRegistration, Waitlist } = db;
 const { ValidationError, NotFoundError } = require('../utils/errors');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
+const notificationService = require('../services/notificationService');
 
 const MAX_RETRY_ATTEMPTS = 3;
 
@@ -456,6 +457,40 @@ const create = async (req, res, next) => {
         }
       ]
     });
+
+    // Tüm öğrencilere bildirim gönder
+    try {
+      const studentIds = await notificationService.getAllStudents();
+      if (studentIds.length > 0) {
+        const notificationTitle = 'Yeni Etkinlik Duyurusu';
+        const eventDate = new Date(event.date);
+        const formattedDate = eventDate.toLocaleDateString('tr-TR', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        const message = `${event.title} - ${event.location} - ${formattedDate}`;
+        
+        await notificationService.createBulkNotifications(
+          studentIds,
+          'event',
+          notificationTitle,
+          message,
+          {
+            eventId: event.id,
+            eventTitle: event.title,
+            eventDate: event.date,
+            eventLocation: event.location,
+            eventCapacity: event.capacity
+          }
+        );
+      }
+    } catch (error) {
+      // Bildirim gönderme hatası etkinlik oluşturmayı engellemez
+      console.error('Error sending event notifications:', error);
+    }
 
     res.status(201).json(createdEvent);
   } catch (error) {

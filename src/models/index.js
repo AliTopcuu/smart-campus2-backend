@@ -39,6 +39,7 @@ db.EventRegistration = require('./eventregistration')(sequelize, DataTypes);
 db.Waitlist = require('./waitlist')(sequelize, DataTypes);
 db.EventSurvey = require('./eventsurvey')(sequelize, DataTypes);
 db.ClassroomReservation = require('./classroomreservation')(sequelize, DataTypes);
+db.Notification = require('./notification')(sequelize, DataTypes);
 
 Object.values(db).forEach((model) => {
   if (model.associate) {
