@@ -52,15 +52,23 @@ const register = async ({ fullName, email, password, role, studentNumber, depart
   const verificationToken = crypto.randomUUID();
   const verificationExpires = new Date(Date.now() + 1000 * 60 * 60 * 24);
 
-  const user = await User.create({
-    fullName,
-    email,
-    passwordHash,
-    role,
-    status: 'pending', // Email doğrulaması gerekiyor
-    verificationToken,
-    verificationExpires,
-  });
+  let user;
+  try {
+    user = await User.create({
+      fullName,
+      email,
+      passwordHash,
+      role,
+      status: 'pending', // Email doğrulaması gerekiyor
+      verificationToken,
+      verificationExpires,
+    });
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      throw new ValidationError('Email already in use');
+    }
+    throw error;
+  }
 
   if (role === 'student') {
     const dept = await ensureDepartment(department || 'General Studies');
@@ -83,9 +91,9 @@ const register = async ({ fullName, email, password, role, studentNumber, depart
 
   console.log(`[register] User created with ID: ${user.id}, email: ${email}`);
   console.log(`[register] Calling sendVerificationEmail...`);
-  
+
   await sendVerificationEmail(email, verificationToken);
-  
+
   console.log(`[register] Email sending process completed for: ${email}\n`);
 
   return {
@@ -191,7 +199,7 @@ const invalidateUserSessions = (userId) => {
 
 const forgotPassword = async (email) => {
   console.log(`\n[forgotPassword] Request received for email: ${email}`);
-  
+
   const user = await User.findOne({ where: { email } });
   if (!user) {
     console.log(`[forgotPassword] User not found for email: ${email}`);
@@ -206,9 +214,9 @@ const forgotPassword = async (email) => {
 
   console.log(`[forgotPassword] Reset token generated for user: ${user.id}, email: ${email}`);
   console.log(`[forgotPassword] Calling sendResetPasswordEmail...`);
-  
+
   await sendResetPasswordEmail(email, resetToken);
-  
+
   console.log(`[forgotPassword] Email sending process completed for: ${email}\n`);
   return { message: 'Reset instructions sent.' };
 };

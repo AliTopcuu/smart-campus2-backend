@@ -7,6 +7,7 @@ module.exports = (sequelize, DataTypes) => {
             Wallet.belongsTo(models.User, {
                 foreignKey: 'userId',
                 as: 'user',
+                onDelete: 'CASCADE'
             });
             Wallet.hasMany(models.Transaction, {
                 foreignKey: 'walletId',

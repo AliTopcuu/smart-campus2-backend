@@ -4,7 +4,7 @@ module.exports = (sequelize, DataTypes) => {
   class AttendanceRecord extends Model {
     static associate(models) {
       AttendanceRecord.belongsTo(models.AttendanceSession, { foreignKey: 'sessionId', as: 'session' });
-      AttendanceRecord.belongsTo(models.User, { foreignKey: 'studentId', as: 'student' });
+      AttendanceRecord.belongsTo(models.User, { foreignKey: 'studentId', as: 'student', onDelete: 'CASCADE' });
     }
   }
   AttendanceRecord.init({

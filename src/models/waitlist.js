@@ -8,7 +8,7 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      Waitlist.belongsTo(models.User, { foreignKey: 'userId', as: 'user' });
+      Waitlist.belongsTo(models.User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE' });
       Waitlist.belongsTo(models.Event, { foreignKey: 'eventId', as: 'event' });
     }
   }

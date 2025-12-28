@@ -32,7 +32,7 @@ describe('authorizeRole Middleware - Unit Tests', () => {
 
     expect(next).toHaveBeenCalledWith(expect.any(ForbiddenError));
     expect(next).toHaveBeenCalledTimes(1);
-    expect(next.mock.calls[0][0].message).toBe('Insufficient permissions');
+    expect(next.mock.calls[0][0].message).toBe('Insufficient permissions. Required roles: admin, faculty, Your role: student');
   });
 
   it('should call next() with ForbiddenError when user is null', () => {

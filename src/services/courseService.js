@@ -1,3 +1,4 @@
+const { NotFoundError } = require('../utils/errors');
 const db = require('../models');
 const { Course, Department, CoursePrerequisite, CourseSection } = db;
 
@@ -81,7 +82,7 @@ const getById = async (courseId) => {
   });
 
   if (!course) {
-    throw new Error('Course not found');
+    throw new NotFoundError('Course not found');
   }
 
   return course;
@@ -107,7 +108,7 @@ const create = async (courseData) => {
       if (prereqId === course.id) {
         continue;
       }
-      
+
       // Check if prerequisite course exists
       const prereqCourse = await Course.findByPk(prereqId);
       if (prereqCourse) {
@@ -150,7 +151,7 @@ const create = async (courseData) => {
 const update = async (courseId, courseData) => {
   const course = await Course.findByPk(courseId);
   if (!course) {
-    throw new Error('Course not found');
+    throw new NotFoundError('Course not found');
   }
 
   const { code, name, description, credits, ects, syllabusUrl, departmentId, prerequisiteIds } = courseData;
@@ -179,7 +180,7 @@ const update = async (courseId, courseData) => {
         if (prereqId === course.id) {
           continue;
         }
-        
+
         // Check if prerequisite course exists
         const prereqCourse = await Course.findByPk(prereqId);
         if (prereqCourse) {
@@ -223,7 +224,7 @@ const update = async (courseId, courseData) => {
 const remove = async (courseId) => {
   const course = await Course.findByPk(courseId);
   if (!course) {
-    throw new Error('Course not found');
+    throw new NotFoundError('Course not found');
   }
 
   await course.destroy();

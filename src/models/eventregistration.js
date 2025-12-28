@@ -8,7 +8,7 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      EventRegistration.belongsTo(models.User, { foreignKey: 'userId', as: 'user' });
+      EventRegistration.belongsTo(models.User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE' });
       EventRegistration.belongsTo(models.Event, { foreignKey: 'eventId', as: 'event' });
     }
   }

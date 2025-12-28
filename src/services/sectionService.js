@@ -1,3 +1,4 @@
+const { NotFoundError } = require('../utils/errors');
 const db = require('../models');
 const { CourseSection, Course, User, Classroom } = db;
 
@@ -63,7 +64,7 @@ const getById = async (sectionId) => {
   });
 
   if (!section || !section.course) {
-    throw new Error('Section not found or course has been deleted');
+    throw new NotFoundError('Section not found or course has been deleted');
   }
 
   return section;
@@ -93,7 +94,7 @@ const mySections = async (instructorId) => {
     // Use toJSON() to get plain object, then get scheduleJson
     const sectionData = section.toJSON ? section.toJSON() : section;
     let scheduleJson = sectionData.scheduleJson;
-    
+
     // If it's a string, try to parse it
     if (typeof scheduleJson === 'string') {
       try {
@@ -102,7 +103,7 @@ const mySections = async (instructorId) => {
         scheduleJson = null;
       }
     }
-    
+
     // Debug log
     if (process.env.NODE_ENV === 'development') {
       console.log('Section schedule data:', {
@@ -112,7 +113,7 @@ const mySections = async (instructorId) => {
         rawScheduleJson: sectionData.scheduleJson
       });
     }
-    
+
     // Return section with parsed scheduleJson
     return {
       ...sectionData,
@@ -152,7 +153,7 @@ const create = async (sectionData) => {
 const update = async (sectionId, sectionData) => {
   const section = await CourseSection.findByPk(sectionId);
   if (!section) {
-    throw new Error('Section not found');
+    throw new NotFoundError('Section not found');
   }
 
   const { courseId, sectionNumber, semester, year, instructorId, capacity, scheduleJson, classroomId } = sectionData;

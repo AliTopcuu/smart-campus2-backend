@@ -1,0 +1,127 @@
+[dotenv@17.2.3] injecting env (0) from .env.test -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+Connecting to: postgres://ranad:ranad@localhost:5432/campus_test
+Connected to DB.
+Constraints on Users table:
+{
+  "conname": "Users_id_not_null",
+  "contype": "n",
+  "conkey": [
+    1
+  ],
+  "pg_get_constraintdef": "NOT NULL id"
+}
+{
+  "conname": "Users_fullName_not_null",
+  "contype": "n",
+  "conkey": [
+    2
+  ],
+  "pg_get_constraintdef": "NOT NULL \"fullName\""
+}
+{
+  "conname": "Users_email_not_null",
+  "contype": "n",
+  "conkey": [
+    3
+  ],
+  "pg_get_constraintdef": "NOT NULL email"
+}
+{
+  "conname": "Users_passwordHash_not_null",
+  "contype": "n",
+  "conkey": [
+    4
+  ],
+  "pg_get_constraintdef": "NOT NULL \"passwordHash\""
+}
+{
+  "conname": "Users_role_not_null",
+  "contype": "n",
+  "conkey": [
+    5
+  ],
+  "pg_get_constraintdef": "NOT NULL role"
+}
+{
+  "conname": "Users_createdAt_not_null",
+  "contype": "n",
+  "conkey": [
+    13
+  ],
+  "pg_get_constraintdef": "NOT NULL \"createdAt\""
+}
+{
+  "conname": "Users_updatedAt_not_null",
+  "contype": "n",
+  "conkey": [
+    14
+  ],
+  "pg_get_constraintdef": "NOT NULL \"updatedAt\""
+}
+{
+  "conname": "Users_pkey",
+  "contype": "p",
+  "conkey": [
+    1
+  ],
+  "pg_get_constraintdef": "PRIMARY KEY (id)"
+}
+{
+  "conname": "Users_email_key",
+  "contype": "u",
+  "conkey": [
+    3
+  ],
+  "pg_get_constraintdef": "UNIQUE (email)"
+}
+Constraints on Enrollments table:
+{
+  "conname": "Enrollments_id_not_null",
+  "contype": "n",
+  "pg_get_constraintdef": "NOT NULL id"
+}
+{
+  "conname": "Enrollments_studentId_not_null",
+  "contype": "n",
+  "pg_get_constraintdef": "NOT NULL \"studentId\""
+}
+{
+  "conname": "Enrollments_sectionId_not_null",
+  "contype": "n",
+  "pg_get_constraintdef": "NOT NULL \"sectionId\""
+}
+{
+  "conname": "Enrollments_status_not_null",
+  "contype": "n",
+  "pg_get_constraintdef": "NOT NULL status"
+}
+{
+  "conname": "Enrollments_enrollmentDate_not_null",
+  "contype": "n",
+  "pg_get_constraintdef": "NOT NULL \"enrollmentDate\""
+}
+{
+  "conname": "Enrollments_createdAt_not_null",
+  "contype": "n",
+  "pg_get_constraintdef": "NOT NULL \"createdAt\""
+}
+{
+  "conname": "Enrollments_updatedAt_not_null",
+  "contype": "n",
+  "pg_get_constraintdef": "NOT NULL \"updatedAt\""
+}
+{
+  "conname": "Enrollments_pkey",
+  "contype": "p",
+  "pg_get_constraintdef": "PRIMARY KEY (id)"
+}
+{
+  "conname": "Enrollments_studentId_fkey",
+  "contype": "f",
+  "pg_get_constraintdef": "FOREIGN KEY (\"studentId\") REFERENCES \"Users\"(id) ON UPDATE CASCADE"
+}
+{
+  "conname": "Enrollments_sectionId_fkey",
+  "contype": "f",
+  "pg_get_constraintdef": "FOREIGN KEY (\"sectionId\") REFERENCES \"CourseSections\"(id) ON UPDATE CASCADE ON DELETE CASCADE"
+}
