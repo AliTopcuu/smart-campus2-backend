@@ -64,10 +64,31 @@ const registerForEvent = async (req, res, next) => {
         throw new NotFoundError('Event not found');
       }
 
+      // Check if event is cancelled
+      if (event.status === 'cancelled') {
+        await t.rollback();
+        throw new ValidationError('Bu etkinlik iptal edilmiş. Kayıt yapılamaz.');
+      }
+
+      // Check if event is completed or past
+      const now = new Date();
+      const eventDate = new Date(event.date);
+      
+      // Check if event date has passed (compare dates only, ignore time)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const eventDateOnly = new Date(eventDate);
+      eventDateOnly.setHours(0, 0, 0, 0);
+      
+      if (event.status === 'completed' || eventDateOnly < today) {
+        await t.rollback();
+        throw new ValidationError('Bu etkinlik bitmiş. Kayıt yapılamaz.');
+      }
+
       // Check if event is active
       if (event.status !== 'active') {
         await t.rollback();
-        throw new ValidationError(`Event is ${event.status}. Registration is not available.`);
+        throw new ValidationError(`Etkinlik ${event.status} durumunda. Kayıt yapılamaz.`);
       }
 
       // 3. Capacity Management with Optimistic Locking
@@ -371,13 +392,34 @@ const checkIn = async (req, res, next) => {
     // Check if cancelled
     if (registration.status === 'cancelled') {
       await t.rollback();
-      throw new ValidationError('This registration has been cancelled');
+      throw new ValidationError('Bu kayıt iptal edilmiş.');
+    }
+
+    // Check if event is cancelled
+    if (registration.event.status === 'cancelled') {
+      await t.rollback();
+      throw new ValidationError('Bu etkinlik iptal edilmiş. Giriş yapılamaz.');
+    }
+
+    // Check if event is completed or past
+    const now = new Date();
+    const eventDate = new Date(registration.event.date);
+    
+    // Check if event date has passed (compare dates only, ignore time)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const eventDateOnly = new Date(eventDate);
+    eventDateOnly.setHours(0, 0, 0, 0);
+    
+    if (registration.event.status === 'completed' || eventDateOnly < today) {
+      await t.rollback();
+      throw new ValidationError('Bu etkinlik bitmiş. Giriş yapılamaz.');
     }
 
     // Check if event is active
     if (registration.event.status !== 'active') {
       await t.rollback();
-      throw new ValidationError(`Event is ${registration.event.status}. Check-in is not available.`);
+      throw new ValidationError(`Etkinlik ${registration.event.status} durumunda. Giriş yapılamaz.`);
     }
 
     // Update registration status to checked-in
