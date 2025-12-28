@@ -251,17 +251,28 @@ exports.getAcademicPerformance = async (req, res) => {
             }
         });
 
-        // Geçme/kalma oranları (gradePoint >= 2.0 geçti)
-        // Sadece gradePoint değeri olan kayıtları say
-        const passCount = await db.Enrollment.count({
+        // Geçme/kalma oranları - ÖĞRENCİ BAZLI (Ortalama GPA >= 2.0 olanlar başarılı sayılır)
+        const studentGPAs = await db.Enrollment.findAll({
+            attributes: [
+                'studentId',
+                [fn('AVG', col('gradePoint')), 'avgGpa']
+            ],
             where: {
-                gradePoint: { [Op.gte]: 2.0 }
-            }
+                letterGrade: { [Op.ne]: null }
+            },
+            group: ['studentId'],
+            raw: true
         });
 
-        const failCount = await db.Enrollment.count({
-            where: {
-                gradePoint: { [Op.lt]: 2.0, [Op.ne]: null }
+        let passCount = 0;
+        let failCount = 0;
+
+        studentGPAs.forEach(s => {
+            const gpa = parseFloat(s.avgGpa || 0);
+            if (gpa >= 2.0) {
+                passCount++;
+            } else {
+                failCount++;
             }
         });
 
@@ -275,7 +286,7 @@ exports.getAcademicPerformance = async (req, res) => {
                 [fn('AVG', col('gradePoint')), 'avgGpa']
             ],
             where: {
-                gradePoint: { [Op.ne]: null }
+                letterGrade: { [Op.ne]: null }
             },
             raw: true
         });
@@ -294,7 +305,7 @@ exports.getAcademicPerformance = async (req, res) => {
                 attributes: ['id', 'fullName', 'email']
             }],
             where: {
-                gradePoint: { [Op.ne]: null }
+                letterGrade: { [Op.ne]: null }
             },
             group: ['studentId', 'student.id', 'student.fullName', 'student.email'],
             having: literal('AVG("gradePoint") >= 0'),
@@ -316,7 +327,7 @@ exports.getAcademicPerformance = async (req, res) => {
                 attributes: ['id', 'fullName', 'email']
             }],
             where: {
-                gradePoint: { [Op.ne]: null }
+                letterGrade: { [Op.ne]: null }
             },
             group: ['studentId', 'student.id', 'student.fullName', 'student.email'],
             having: literal('AVG("gradePoint") < 2.0'),
