@@ -224,134 +224,139 @@ exports.getAcademicPerformance = async (req, res) => {
             where: { status: 'completed' }
         });
 
-        // Not dağılımı
-        const gradeDistribution = await db.Enrollment.findAll({
-            attributes: [
-                'letterGrade',
-                [fn('COUNT', col('*')), 'count']
-            ],
+        // Fetch all data needed for calculations
+        // We need: letterGrade, gradePoint, Student info, Course credits
+        const allGrades = await db.Enrollment.findAll({
             where: {
-                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
+                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
+                status: { [Op.in]: ['enrolled', 'completed', 'failed'] } // Consistent with gradeService
             },
-            group: ['letterGrade'],
+            include: [
+                {
+                    model: db.User,
+                    as: 'student',
+                    attributes: ['id', 'fullName', 'email']
+                },
+                {
+                    model: db.CourseSection,
+                    as: 'section',
+                    required: true,
+                    include: [{
+                        model: db.Course,
+                        as: 'course',
+                        attributes: ['credits']
+                    }]
+                }
+            ],
             raw: true
         });
 
-        // Toplam not sayısı
-        const totalGrades = gradeDistribution.reduce((sum, g) => sum + parseInt(g.count || 0), 0);
+        // Process Data
+        const studentStats = {}; // { studentId: { totalPoints, totalCredits, user: {...} } }
+        const gradeCounts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+        let totalValGraded = 0;
 
-        const gradePercentages = {
-            A: 0, B: 0, C: 0, D: 0, F: 0
-        };
-
-        gradeDistribution.forEach(g => {
-            const letter = g.letterGrade?.charAt(0) || 'F';
-            if (gradePercentages.hasOwnProperty(letter)) {
-                gradePercentages[letter] += (parseInt(g.count || 0) / Math.max(totalGrades, 1)) * 100;
+        allGrades.forEach(row => {
+            // Grade Distribution
+            const letter = row.letterGrade?.charAt(0) || 'F';
+            if (gradeCounts.hasOwnProperty(letter)) {
+                gradeCounts[letter]++;
             }
-        });
+            totalValGraded++;
 
-        // Geçme/kalma oranları - ÖĞRENCİ BAZLI (Ortalama GPA >= 2.0 olanlar başarılı sayılır)
-        const studentGPAs = await db.Enrollment.findAll({
-            attributes: [
-                'studentId',
-                [fn('AVG', col('gradePoint')), 'avgGpa']
-            ],
-            where: {
-                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
-            },
-            group: ['studentId'],
-            raw: true
-        });
-
-        let passCount = 0;
-        let failCount = 0;
-
-        studentGPAs.forEach(s => {
-            const gpa = parseFloat(s.avgGpa || 0);
-            if (gpa >= 2.0) {
-                passCount++;
-            } else {
-                failCount++;
+            // GPA Calculation Accumulation
+            const sId = row.studentId;
+            if (!studentStats[sId]) {
+                studentStats[sId] = {
+                    totalPoints: 0,
+                    totalCredits: 0,
+                    courseCount: 0,
+                    user: {
+                        id: sId,
+                        fullName: row['student.fullName'],
+                        email: row['student.email']
+                    }
+                };
             }
+
+            const credits = parseFloat(row['section.course.credits'] || 0);
+            const points = parseFloat(row.gradePoint || 0);
+
+            if (credits > 0) {
+                studentStats[sId].totalPoints += (points * credits);
+                studentStats[sId].totalCredits += credits;
+            }
+            studentStats[sId].courseCount++;
         });
 
-        const totalWithGrades = passCount + failCount;
-        const passRate = totalWithGrades > 0 ? Math.round((passCount / totalWithGrades) * 100) : 0;
-        const failRate = totalWithGrades > 0 ? Math.round((failCount / totalWithGrades) * 100) : 0;
-
-        // Ortalama GPA
-        const avgGpaResult = await db.Enrollment.findOne({
-            attributes: [
-                [fn('AVG', col('gradePoint')), 'avgGpa']
-            ],
-            where: {
-                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
-            },
-            raw: true
-        });
-        const avgGpa = parseFloat(avgGpaResult?.avgGpa || 0).toFixed(2);
-
-        // En başarılı öğrenciler (Enrollment'lardan hesaplanan GPA'ya göre)
-        const topStudentsRaw = await db.Enrollment.findAll({
-            attributes: [
-                'studentId',
-                [fn('AVG', col('gradePoint')), 'calculatedGpa'],
-                [fn('COUNT', col('Enrollment.id')), 'courseCount']
-            ],
-            include: [{
-                model: db.User,
-                as: 'student',
-                attributes: ['id', 'fullName', 'email']
-            }],
-            where: {
-                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
-            },
-            group: ['studentId', 'student.id', 'student.fullName', 'student.email'],
-            having: literal('AVG("gradePoint") >= 0'),
-            order: [[fn('AVG', col('gradePoint')), 'DESC']],
-            limit: 10,
-            raw: true
+        // Calculate Final Student GPAs
+        const students = Object.values(studentStats).map(stat => {
+            const gpa = stat.totalCredits > 0
+                ? stat.totalPoints / stat.totalCredits
+                : 0;
+            return {
+                ...stat.user,
+                gpa, // Number
+                courseCount: stat.courseCount
+            };
         });
 
-        // Risk altındaki öğrenciler (düşük GPA < 2.0)
-        const atRiskStudentsRaw = await db.Enrollment.findAll({
-            attributes: [
-                'studentId',
-                [fn('AVG', col('gradePoint')), 'calculatedGpa'],
-                [fn('COUNT', col('Enrollment.id')), 'courseCount']
-            ],
-            include: [{
-                model: db.User,
-                as: 'student',
-                attributes: ['id', 'fullName', 'email']
-            }],
-            where: {
-                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
-            },
-            group: ['studentId', 'student.id', 'student.fullName', 'student.email'],
-            having: literal('AVG("gradePoint") < 2.0'),
-            order: [[fn('AVG', col('gradePoint')), 'ASC']],
-            limit: 10,
-            raw: true
+        // Aggregate Stats
+        const totalGrades = totalValGraded;
+        const gradePercentages = {};
+        Object.keys(gradeCounts).forEach(key => {
+            gradePercentages[key] = totalGrades > 0
+                ? (gradeCounts[key] / totalGrades) * 100
+                : 0;
         });
 
-        // Student tablosundan öğrenci numaralarını al
-        const allUserIds = [
-            ...topStudentsRaw.map(s => s.studentId),
-            ...atRiskStudentsRaw.map(s => s.studentId)
-        ];
+        // Pass/Fail Rates
+        const passingAndFailing = students.reduce((acc, s) => {
+            if (s.gpa >= 2.0) acc.pass++;
+            else acc.fail++;
+            return acc;
+        }, { pass: 0, fail: 0 });
 
-        const studentRecords = await db.Student.findAll({
-            attributes: ['userId', 'studentNumber'],
-            where: { userId: { [Op.in]: allUserIds } },
-            raw: true
-        });
+        const totalStudents = students.length;
+        const passRate = totalStudents > 0 ? Math.round((passingAndFailing.pass / totalStudents) * 100) : 0;
+        const failRate = totalStudents > 0 ? Math.round((passingAndFailing.fail / totalStudents) * 100) : 0;
 
-        // userId -> studentNumber haritası oluştur
-        const studentNumberMap = {};
-        studentRecords.forEach(s => {
-            studentNumberMap[s.userId] = s.studentNumber;
+        // Average GPA (Average of students' GPAs)
+        const totalGpaSum = students.reduce((sum, s) => sum + s.gpa, 0);
+        const avgGpa = totalStudents > 0 ? (totalGpaSum / totalStudents) : 0;
+
+        // Top and Risk Students
+        const sortedStudents = [...students].sort((a, b) => b.gpa - a.gpa);
+        const topStudentsRaw = sortedStudents.slice(0, 10);
+        const atRiskStudentsRaw = [...students]
+            .filter(s => s.gpa < 2.0)
+            .sort((a, b) => a.gpa - b.gpa) // Ascending
+            .slice(0, 10);
+
+        // Fetch Student Numbers
+        const filteredUserIds = new Set([
+            ...topStudentsRaw.map(s => s.id),
+            ...atRiskStudentsRaw.map(s => s.id)
+        ]);
+
+        let studentNumberMap = {};
+        if (filteredUserIds.size > 0) {
+            const studentRecords = await db.Student.findAll({
+                attributes: ['userId', 'studentNumber'],
+                where: { userId: { [Op.in]: Array.from(filteredUserIds) } },
+                raw: true
+            });
+            studentRecords.forEach(s => studentNumberMap[s.userId] = s.studentNumber);
+        }
+
+        // Format Output
+        const formatStudent = (s) => ({
+            id: s.id,
+            studentNumber: studentNumberMap[s.id] || s.id,
+            fullName: s.fullName || '-',
+            email: s.email || '-',
+            gpa: s.gpa.toFixed(2),
+            courseCount: s.courseCount
         });
 
         res.json({
@@ -359,30 +364,17 @@ exports.getAcademicPerformance = async (req, res) => {
                 totalEnrollments,
                 completedEnrollments,
                 totalGrades,
-                avgGpa: parseFloat(avgGpa)
+                avgGpa: parseFloat(avgGpa.toFixed(2))
             },
             gradeDistribution: gradePercentages,
             passFailRate: {
                 passRate,
                 failRate
             },
-            topStudents: topStudentsRaw.map(s => ({
-                id: s.studentId,
-                studentNumber: studentNumberMap[s.studentId] || s.studentId,
-                fullName: s['student.fullName'] || '-',
-                email: s['student.email'] || '-',
-                gpa: parseFloat(s.calculatedGpa || 0).toFixed(2),
-                courseCount: parseInt(s.courseCount || 0)
-            })),
-            atRiskStudents: atRiskStudentsRaw.map(s => ({
-                id: s.studentId,
-                studentNumber: studentNumberMap[s.studentId] || s.studentId,
-                fullName: s['student.fullName'] || '-',
-                email: s['student.email'] || '-',
-                gpa: parseFloat(s.calculatedGpa || 0).toFixed(2),
-                courseCount: parseInt(s.courseCount || 0)
-            }))
+            topStudents: topStudentsRaw.map(formatStudent),
+            atRiskStudents: atRiskStudentsRaw.map(formatStudent)
         });
+
     } catch (error) {
         console.error('Academic performance error:', error);
         res.status(500).json({ error: 'Akademik performans verileri alınamadı' });

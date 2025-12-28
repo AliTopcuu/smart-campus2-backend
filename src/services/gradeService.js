@@ -208,9 +208,8 @@ const myGrades = async (studentId, filters = {}) => {
   const allCompleted = await Enrollment.findAll({
     where: {
       studentId,
-      letterGrade: { [Op.ne]: null } // Only requirement: must have a letter grade
-      // Note: We don't filter by status here because grades can be entered
-      // while enrollment is still 'enrolled' status
+      letterGrade: { [Op.ne]: null }, // Only requirement: must have a letter grade
+      status: { [Op.in]: ['enrolled', 'completed', 'failed'] } // Must be an active or completed enrollment
     },
     include: [
       {
