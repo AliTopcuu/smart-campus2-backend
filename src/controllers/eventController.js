@@ -617,7 +617,61 @@ const getEventParticipants = async (req, res, next) => {
 };
 
 /**
+ * Get event waitlist (Admin only)
+ */
+const getEventWaitlist = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      throw new NotFoundError('Event not found');
+    }
+
+    const waitlistEntries = await Waitlist.findAll({
+      where: { eventId: id },
+      include: [
+        {
+          model: db.User,
+          as: 'user',
+          attributes: ['id', 'fullName', 'email', 'role']
+        }
+      ],
+      order: [['requestDate', 'ASC']] // En erken eklenenler önce
+    });
+
+    // Map to include user info
+    const waitlist = waitlistEntries.map(entry => ({
+      id: entry.id,
+      userId: entry.userId,
+      eventId: entry.eventId,
+      requestDate: entry.requestDate,
+      user: {
+        id: entry.user.id,
+        fullName: entry.user.fullName,
+        email: entry.user.email,
+        role: entry.user.role
+      }
+    }));
+
+    res.json({
+      event: {
+        id: event.id,
+        title: event.title,
+        capacity: event.capacity,
+        currentParticipants: event.currentParticipants
+      },
+      waitlist
+    });
+  } catch (error) {
+    console.error('Get event waitlist error:', error);
+    next(error);
+  }
+};
+
+/**
  * Remove participant from event (Admin only)
+ * Automatically promotes first person from waitlist if available
  */
 const removeParticipant = async (req, res, next) => {
   const t = await db.sequelize.transaction();
@@ -643,21 +697,107 @@ const removeParticipant = async (req, res, next) => {
       throw new NotFoundError('Registration not found');
     }
 
+    const wasRegistered = registration.status === 'registered' || registration.status === 'checked-in';
+
     // Delete registration
     await registration.destroy({ transaction: t });
 
     // Decrement currentParticipants if status was registered or checked-in
-    if (registration.status === 'registered' || registration.status === 'checked-in') {
-      await Event.update(
+    if (wasRegistered) {
+      const newParticipantCount = Math.max(0, event.currentParticipants - 1);
+      
+      // Update event: decrement participants and increment version
+      const [updatedRows] = await Event.update(
         {
-          currentParticipants: Math.max(0, event.currentParticipants - 1),
+          currentParticipants: newParticipantCount,
           version: event.version + 1
         },
         {
-          where: { id },
+          where: { 
+            id,
+            version: event.version // Optimistic lock
+          },
           transaction: t
         }
       );
+
+      if (updatedRows === 0) {
+        await t.rollback();
+        throw new ValidationError('Event was modified. Please try again.');
+      }
+
+      // Reload event to get updated version
+      await event.reload({ transaction: t });
+
+      // Check if there's space and someone on waitlist
+      if (newParticipantCount < event.capacity) {
+        // Get the first person from waitlist (earliest requestDate)
+        const firstWaitlistEntry = await Waitlist.findOne({
+          where: { eventId: id },
+          include: [
+            {
+              model: db.User,
+              as: 'user',
+              attributes: ['id', 'fullName', 'email']
+            }
+          ],
+          order: [['requestDate', 'ASC']],
+          transaction: t
+        });
+
+        if (firstWaitlistEntry) {
+          // Remove from waitlist
+          await firstWaitlistEntry.destroy({ transaction: t });
+
+          // Generate unique QR code for the new registration
+          const qrCodeData = `EVENT-${id}-${firstWaitlistEntry.userId}-${crypto.randomUUID()}`;
+
+          // Create registration for waitlist person
+          const newRegistration = await EventRegistration.create({
+            userId: firstWaitlistEntry.userId,
+            eventId: id,
+            status: 'registered',
+            qrCode: qrCodeData
+          }, {
+            transaction: t,
+            fields: ['userId', 'eventId', 'status', 'qrCode']
+          });
+
+          // Increment currentParticipants (event.version is already updated from reload)
+          await Event.update(
+            {
+              currentParticipants: newParticipantCount + 1,
+              version: event.version + 1
+            },
+            {
+              where: { 
+                id,
+                version: event.version // Optimistic lock with updated version
+              },
+              transaction: t
+            }
+          );
+
+          // Send notification to the user
+          try {
+            await notificationService.createNotification(
+              firstWaitlistEntry.userId,
+              'event',
+              'Etkinlik Kaydı Onaylandı',
+              `${event.title} etkinliğine bekleme listesinden kaydınız onaylandı.`,
+              {
+                eventId: event.id,
+                eventTitle: event.title,
+                eventDate: event.date,
+                eventLocation: event.location
+              }
+            );
+          } catch (notifError) {
+            // Notification error shouldn't fail the transaction
+            console.error('Error sending waitlist promotion notification:', notifError);
+          }
+        }
+      }
     }
 
     await t.commit();
@@ -734,6 +874,7 @@ module.exports = {
   update,
   remove,
   getEventParticipants,
+  getEventWaitlist,
   removeParticipant
 };
 

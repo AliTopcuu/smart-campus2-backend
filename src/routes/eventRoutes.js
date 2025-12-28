@@ -44,6 +44,7 @@ router.get('/my-registrations', authenticate, eventController.myRegistrations);
 // Admin routes - must be before /:id route to avoid route conflicts
 router.post('/', authenticate, authorizeRole(['admin']), validateRequest(createEventSchema), eventController.create);
 router.get('/:id/participants', authenticate, authorizeRole(['admin']), eventController.getEventParticipants);
+router.get('/:id/waitlist', authenticate, authorizeRole(['admin']), eventController.getEventWaitlist);
 router.delete('/:id/participants/:registrationId', authenticate, authorizeRole(['admin']), eventController.removeParticipant);
 
 // Public routes (must be after specific routes)
