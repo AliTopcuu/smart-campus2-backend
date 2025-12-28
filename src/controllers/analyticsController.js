@@ -231,7 +231,7 @@ exports.getAcademicPerformance = async (req, res) => {
                 [fn('COUNT', col('*')), 'count']
             ],
             where: {
-                letterGrade: { [Op.ne]: null }
+                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
             },
             group: ['letterGrade'],
             raw: true
@@ -258,7 +258,7 @@ exports.getAcademicPerformance = async (req, res) => {
                 [fn('AVG', col('gradePoint')), 'avgGpa']
             ],
             where: {
-                letterGrade: { [Op.ne]: null }
+                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
             },
             group: ['studentId'],
             raw: true
@@ -286,7 +286,7 @@ exports.getAcademicPerformance = async (req, res) => {
                 [fn('AVG', col('gradePoint')), 'avgGpa']
             ],
             where: {
-                letterGrade: { [Op.ne]: null }
+                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
             },
             raw: true
         });
@@ -305,7 +305,7 @@ exports.getAcademicPerformance = async (req, res) => {
                 attributes: ['id', 'fullName', 'email']
             }],
             where: {
-                letterGrade: { [Op.ne]: null }
+                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
             },
             group: ['studentId', 'student.id', 'student.fullName', 'student.email'],
             having: literal('AVG("gradePoint") >= 0'),
@@ -327,7 +327,7 @@ exports.getAcademicPerformance = async (req, res) => {
                 attributes: ['id', 'fullName', 'email']
             }],
             where: {
-                letterGrade: { [Op.ne]: null }
+                letterGrade: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
             },
             group: ['studentId', 'student.id', 'student.fullName', 'student.email'],
             having: literal('AVG("gradePoint") < 2.0'),
