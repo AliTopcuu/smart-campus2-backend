@@ -154,36 +154,36 @@ const myGrades = async (studentId, filters = {}) => {
   const completedGrades = grades.filter(g => {
     // Must have letterGrade and credits (credits can be 0, but should be defined)
     if (!g.letterGrade || g.credits === null || g.credits === undefined) return false;
+
     // If gradePoint is still null or undefined, calculate it now
     if (g.gradePoint === null || g.gradePoint === undefined) {
-      g.gradePoint = calculateGradePoint(g.letterGrade);
-      // If calculation fails, default to 0.0
-      if (g.gradePoint === null || g.gradePoint === undefined) {
-        g.gradePoint = 0.0;
+      const calculated = calculateGradePoint(g.letterGrade);
+      // If calculation returns null (unknown grade like 'G', 'M'), EXCLUDE from GPA
+      if (calculated === null || calculated === undefined) {
+        return false;
       }
+      g.gradePoint = calculated;
     }
-    // Include courses with gradePoint (even if 0.0)
-    return g.gradePoint !== null && g.gradePoint !== undefined;
+
+    // Include courses with gradePoint (including 0.0 for F)
+    // Double check it's a number
+    return g.gradePoint !== null && g.gradePoint !== undefined && !isNaN(g.gradePoint);
   });
 
   let gpa = null;
   if (completedGrades.length > 0) {
     const totalPoints = completedGrades.reduce((sum, g) => {
-      const points = parseFloat(g.gradePoint || 0);
-      const credits = parseFloat(g.credits || 0);
+      const points = parseFloat(g.gradePoint);
+      const credits = parseFloat(g.credits);
       return sum + (points * credits);
     }, 0);
-    const totalCredits = completedGrades.reduce((sum, g) => sum + parseFloat(g.credits || 0), 0);
+    const totalCredits = completedGrades.reduce((sum, g) => sum + parseFloat(g.credits), 0);
     gpa = totalCredits > 0 ? totalPoints / totalCredits : null;
 
     console.log('GPA calculation:', {
       completedGradesCount: completedGrades.length,
-      completedGrades: completedGrades.map(g => ({
-        courseCode: g.courseCode,
-        letterGrade: g.letterGrade,
-        gradePoint: g.gradePoint,
-        credits: g.credits
-      })),
+      // Log simple summary
+      courses: completedGrades.map(g => `${g.courseCode}: ${g.letterGrade}(${g.gradePoint}) x ${g.credits}`),
       totalPoints,
       totalCredits,
       gpa
@@ -229,68 +229,49 @@ const myGrades = async (studentId, filters = {}) => {
     ]
   });
 
-  console.log('CGPA query - allCompleted count:', allCompleted.length, {
-    studentId,
-    filters,
-    enrollments: allCompleted.map(e => ({
-      id: e.id,
-      status: e.status,
-      letterGrade: e.letterGrade,
-      gradePoint: e.gradePoint,
-      sectionYear: e.section?.year,
-      sectionSemester: e.section?.semester,
-      courseCode: e.section?.course?.code
-    }))
-  });
+  console.log('CGPA query - allCompleted count:', allCompleted.length);
 
   let cgpa = null;
-  if (allCompleted.length > 0) {
-    const completedWithCredits = allCompleted.filter(e => e.section?.course?.credits && e.letterGrade);
-    if (completedWithCredits.length > 0) {
-      const totalPoints = completedWithCredits.reduce((sum, e) => {
-        // If gradePoint is null, calculate from letterGrade
-        let points = parseFloat(e.gradePoint || 0);
-        if ((points === 0 || e.gradePoint === null || e.gradePoint === undefined) && e.letterGrade) {
-          const calculated = calculateGradePoint(e.letterGrade);
-          points = parseFloat(calculated !== null && calculated !== undefined ? calculated : 0);
-        }
-        const credits = parseFloat(e.section?.course?.credits || 0);
-        const contribution = points * credits;
-        console.log('CGPA contribution:', {
-          enrollmentId: e.id,
-          courseCode: e.section?.course?.code,
-          year: e.section?.year,
-          semester: e.section?.semester,
-          letterGrade: e.letterGrade,
-          gradePoint: points,
-          credits: credits,
-          contribution: contribution
-        });
-        return sum + contribution;
-      }, 0);
-      const totalCredits = completedWithCredits.reduce((sum, e) => {
-        return sum + parseFloat(e.section?.course?.credits || 0);
-      }, 0);
-      cgpa = totalCredits > 0 ? totalPoints / totalCredits : null;
+  // Filter for valid CGPA contributors (must have standard grade point)
+  const validForCgpa = allCompleted.filter(e => {
+    if (!e.section?.course?.credits || !e.letterGrade) return false;
 
-      console.log('CGPA calculation (ALL semesters, ignoring filters):', {
-        filtersApplied: filters,
-        allCompletedCount: allCompleted.length,
-        completedWithCreditsCount: completedWithCredits.length,
-        courses: completedWithCredits.map(e => ({
-          enrollmentId: e.id,
-          courseCode: e.section?.course?.code,
-          year: e.section?.year,
-          semester: e.section?.semester,
-          letterGrade: e.letterGrade,
-          gradePoint: parseFloat(e.gradePoint || 0),
-          credits: parseFloat(e.section?.course?.credits || 0)
-        })),
-        totalPoints,
-        totalCredits,
-        cgpa
-      });
+    // Check grade point
+    let points = parseFloat(e.gradePoint);
+    if (isNaN(points) || e.gradePoint === null || e.gradePoint === undefined) {
+      const calculated = calculateGradePoint(e.letterGrade);
+      if (calculated === null || calculated === undefined) {
+        return false; // Exclude non-standard grades
+      }
+      // Temporarily attach calculated point for next step (reduce)
+      e.calculatedGradePoint = calculated;
+    } else {
+      e.calculatedGradePoint = points;
     }
+    return true;
+  });
+
+  if (validForCgpa.length > 0) {
+    const totalPoints = validForCgpa.reduce((sum, e) => {
+      const points = parseFloat(e.calculatedGradePoint);
+      const credits = parseFloat(e.section?.course?.credits || 0);
+      return sum + (points * credits);
+    }, 0);
+
+    const totalCredits = validForCgpa.reduce((sum, e) => {
+      return sum + parseFloat(e.section?.course?.credits || 0);
+    }, 0);
+
+    cgpa = totalCredits > 0 ? totalPoints / totalCredits : null;
+
+    console.log('CGPA calculation (fixed):', {
+      allCompletedCount: allCompleted.length,
+      validCount: validForCgpa.length,
+      courses: validForCgpa.map(e => `${e.section?.course?.code}: ${e.letterGrade}(${e.calculatedGradePoint})`),
+      totalPoints,
+      totalCredits,
+      cgpa
+    });
   }
 
   // CGPA should always be calculated from ALL courses, regardless of filters
